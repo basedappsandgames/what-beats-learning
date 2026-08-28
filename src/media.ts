@@ -1,6 +1,14 @@
 const AUDIO_KIND = "audio";
+const IMAGE_KIND = "image";
 const CONTENT_TYPE = "audio/mpeg";
+const IMAGE_CONTENT_TYPE = "image/png";
 const MAX_TEXT_LENGTH = 500;
+const MAX_IMAGE_SUBJECT_LENGTH = 80;
+const MAX_IMAGE_PROMPT_LENGTH = 1500;
+const IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
+const IMAGE_PROVIDER = "workers-ai";
+const IMAGE_WIDTH = 1024;
+const IMAGE_HEIGHT = 1024;
 const MINIMAX_MODEL = "speech-2.8-turbo";
 const MANDARIN_VOICE = "Chinese_patitent_teacher";
 const CANTONESE_VOICE = "Cantonese_KindWoman";
@@ -37,7 +45,7 @@ type MediaBindings = {
 type MediaObjectRow = {
 	hash: string;
 	kind: string;
-	provider: AudioProvider;
+	provider: string;
 	model: string;
 	voice: string;
 	lang: string;
@@ -62,6 +70,17 @@ export type AudioResult = {
 	voice: string;
 	lang: string;
 	pace: AudioPace;
+};
+
+export type ImageResult = {
+	hash: string;
+	url: string;
+	cached: boolean;
+	provider: "workers-ai";
+	model: string;
+	subject: string;
+	width: number;
+	height: number;
 };
 
 export function normalizeTtsText(text: string): string {
@@ -170,6 +189,9 @@ function resultFromRow(
 	pace: AudioPace,
 ): AudioResult {
 	if (row.kind !== AUDIO_KIND) throw new Error(`Unexpected media kind ${row.kind}`);
+	if (row.provider !== "minimax" && row.provider !== "fish") {
+		throw new Error(`Unexpected audio provider ${row.provider}`);
+	}
 	return {
 		hash: row.hash,
 		url: mediaUrl(origin, row.hash),
@@ -353,32 +375,202 @@ export async function generateAudio(
 	);
 }
 
+export function normalizeImageSubject(subject: string): string {
+	const normalized = subject.normalize("NFC").trim().replace(/\s+/gu, " ").toLowerCase();
+	if (!normalized) throw new Error("Image subject cannot be empty");
+	if (normalized.length > MAX_IMAGE_SUBJECT_LENGTH) {
+		throw new Error(`Image subject cannot exceed ${MAX_IMAGE_SUBJECT_LENGTH} characters`);
+	}
+	return normalized;
+}
+
+export function normalizeImagePrompt(prompt: string): string {
+	const normalized = prompt.normalize("NFC").trim().replace(/\s+/gu, " ");
+	if (!normalized) throw new Error("Image prompt cannot be empty");
+	if (normalized.length > MAX_IMAGE_PROMPT_LENGTH) {
+		throw new Error(`Image prompt cannot exceed ${MAX_IMAGE_PROMPT_LENGTH} characters`);
+	}
+	return normalized;
+}
+
+export async function imageHash(subject: string): Promise<string> {
+	const bytes = new TextEncoder().encode(
+		JSON.stringify({
+			kind: IMAGE_KIND,
+			provider: IMAGE_PROVIDER,
+			model: IMAGE_MODEL,
+			width: IMAGE_WIDTH,
+			height: IMAGE_HEIGHT,
+			subject,
+		}),
+	);
+	const digest = await crypto.subtle.digest("SHA-256", bytes);
+	return [...new Uint8Array(digest)]
+		.map((value) => value.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+function decodeBase64Image(value: string): Uint8Array {
+	const payload = value.includes(",") ? value.slice(value.indexOf(",") + 1) : value;
+	try {
+		const binary = atob(payload);
+		const bytes = new Uint8Array(binary.length);
+		for (let index = 0; index < binary.length; index += 1) {
+			bytes[index] = binary.charCodeAt(index);
+		}
+		if (bytes.length === 0) throw new Error("empty");
+		return bytes;
+	} catch {
+		throw new Error("Workers AI image response was not valid base64");
+	}
+}
+
+async function synthesizeFlux(
+	prompt: string,
+	ai: Ai,
+): Promise<Uint8Array> {
+	const form = new FormData();
+	form.append("prompt", prompt);
+	form.append("width", String(IMAGE_WIDTH));
+	form.append("height", String(IMAGE_HEIGHT));
+	const encoded = new Response(form);
+	const contentType = encoded.headers.get("content-type");
+	if (!contentType || !encoded.body) throw new Error("Failed to encode Flux request");
+	const result = await ai.run(IMAGE_MODEL, {
+		multipart: {
+			body: encoded.body,
+			contentType,
+		},
+	});
+	if (typeof result?.image !== "string" || !result.image) {
+		throw new Error("Workers AI image response did not contain image data");
+	}
+	return decodeBase64Image(result.image);
+}
+
+export async function generateImage(
+	env: { MEDIA_BUCKET: R2Bucket; MEDIA_DB: D1Database; AI: Ai },
+	input: { subject: string; prompt: string },
+	origin: string,
+	synthesize: (prompt: string) => Promise<Uint8Array> = (prompt) =>
+		synthesizeFlux(prompt, env.AI),
+): Promise<ImageResult> {
+	const subject = normalizeImageSubject(input.subject);
+	const prompt = normalizeImagePrompt(input.prompt);
+	const hash = await imageHash(subject);
+	const existing = await env.MEDIA_DB.prepare(
+		`SELECT hash, kind, provider, model, voice, lang, source_text,
+				r2_key, content_type, byte_size, created_at
+		 FROM media_objects WHERE hash = ?`,
+	)
+		.bind(hash)
+		.first<MediaObjectRow>();
+	if (existing) {
+		if (existing.kind !== IMAGE_KIND) throw new Error(`Unexpected media kind ${existing.kind}`);
+		return {
+			hash: existing.hash,
+			url: mediaUrl(origin, existing.hash),
+			cached: true,
+			provider: IMAGE_PROVIDER,
+			model: existing.model,
+			subject: existing.source_text,
+			width: IMAGE_WIDTH,
+			height: IMAGE_HEIGHT,
+		};
+	}
+
+	const bytes = await synthesize(prompt);
+	const r2Key = `${IMAGE_KIND}/${hash}.png`;
+	const object = await env.MEDIA_BUCKET.put(r2Key, bytes, {
+		httpMetadata: {
+			contentType: IMAGE_CONTENT_TYPE,
+			cacheControl: "public, max-age=31536000, immutable",
+		},
+		customMetadata: { hash, provider: IMAGE_PROVIDER, subject },
+	});
+	if (!object) throw new Error("R2 did not store generated image");
+
+	const createdAt = Date.now();
+	await env.MEDIA_DB.prepare(
+		`INSERT INTO media_objects
+			(hash, kind, provider, model, voice, lang, source_text, r2_key,
+			 content_type, byte_size, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(hash) DO NOTHING`,
+	)
+		.bind(
+			hash,
+			IMAGE_KIND,
+			IMAGE_PROVIDER,
+			IMAGE_MODEL,
+			"",
+			"",
+			subject,
+			r2Key,
+			IMAGE_CONTENT_TYPE,
+			object.size,
+			createdAt,
+		)
+		.run();
+
+	return {
+		hash,
+		url: mediaUrl(origin, hash),
+		cached: false,
+		provider: IMAGE_PROVIDER,
+		model: IMAGE_MODEL,
+		subject,
+		width: IMAGE_WIDTH,
+		height: IMAGE_HEIGHT,
+	};
+}
+
 export async function requireAudioHashes(db: D1Database, hashes: string[]): Promise<void> {
+	await requireMediaHashes(db, hashes, "audio");
+}
+
+export async function requireImageHashes(db: D1Database, hashes: string[]): Promise<void> {
+	await requireMediaHashes(db, hashes, "image");
+}
+
+export async function requireMediaHashes(
+	db: D1Database,
+	hashes: string[],
+	kind: "audio" | "image",
+): Promise<void> {
 	const unique = [...new Set(hashes)];
 	if (unique.length === 0) return;
 	const placeholders = unique.map(() => "?").join(", ");
 	const result = await db
-		.prepare(`SELECT hash FROM media_objects WHERE kind = 'audio' AND hash IN (${placeholders})`)
-		.bind(...unique)
+		.prepare(
+			`SELECT hash FROM media_objects WHERE kind = ? AND hash IN (${placeholders})`,
+		)
+		.bind(kind, ...unique)
 		.all<{ hash: string }>();
 	const found = new Set(result.results.map((row) => row.hash));
 	const missing = unique.filter((hash) => !found.has(hash));
-	if (missing.length) throw new Error(`Unknown audio hash: ${missing.join(", ")}`);
+	if (missing.length) throw new Error(`Unknown ${kind} hash: ${missing.join(", ")}`);
 }
 
-export async function serveAudio(
+export async function serveMedia(
 	request: Request,
 	bucket: R2Bucket,
+	db: D1Database,
 	hash: string,
 ): Promise<Response> {
 	if (!/^[0-9a-f]{64}$/u.test(hash)) return new Response("Not found", { status: 404 });
-	const key = `${AUDIO_KIND}/${hash}.mp3`;
+	const row = await db
+		.prepare("SELECT r2_key, content_type FROM media_objects WHERE hash = ?")
+		.bind(hash)
+		.first<{ r2_key: string; content_type: string }>();
+	if (!row) return new Response("Not found", { status: 404 });
 
 	if (request.method === "HEAD") {
-		const object = await bucket.head(key);
+		const object = await bucket.head(row.r2_key);
 		if (!object) return new Response("Not found", { status: 404 });
 		const headers = new Headers();
 		object.writeHttpMetadata(headers);
+		headers.set("Content-Type", row.content_type);
 		headers.set("Accept-Ranges", "bytes");
 		headers.set("Content-Length", String(object.size));
 		headers.set("ETag", object.httpEtag);
@@ -386,10 +578,11 @@ export async function serveAudio(
 		return new Response(null, { headers });
 	}
 
-	const object = await bucket.get(key, { range: request.headers });
+	const object = await bucket.get(row.r2_key, { range: request.headers });
 	if (!object) return new Response("Not found", { status: 404 });
 	const headers = new Headers();
 	object.writeHttpMetadata(headers);
+	headers.set("Content-Type", row.content_type);
 	headers.set("Accept-Ranges", "bytes");
 	headers.set("ETag", object.httpEtag);
 	headers.set("X-Content-Type-Options", "nosniff");

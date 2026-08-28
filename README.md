@@ -33,6 +33,8 @@ MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mc
 | `create_cards` | Atomically create up to 50 notes |
 | `generate_audio` | Generate or reuse a globally cached pronunciation clip |
 | `attach_audio` | Attach generated audio to an existing note field |
+| `generate_image` | Generate or reuse a cached study image (Workers AI Flux) |
+| `attach_image` | Attach generated image to an existing note field |
 | `add_reverse` | Add a delayed reverse for existing `card_ids` (idempotent) |
 | `get_next_card` | Next due review, else a new card. `empty: true` if nothing is due |
 | `update_sequence` | Grade a specific `card_id`; `rating` is required |
@@ -48,6 +50,10 @@ Isolation: the library Durable Object is keyed by the Google subject in the veri
 `generate_audio` requires explicit text and a BCP-47 language tag. Mandarin uses MiniMax `speech-2.8-turbo` with `Chinese_patitent_teacher`; Cantonese uses `Cantonese_KindWoman`; other languages use Fish Audio `s2.1-pro-free`. Provider failures are returned directly—there is no cross-provider fallback.
 
 Pace is one of `slowest` (0.65×), `slow` (0.8×, default), or `normal` (1×). Cache identity uses NFC-normalized, trimmed text with whitespace runs collapsed to one space, plus language, pace, provider, model, and voice. R2 stores the MP3 once and D1 stores its metadata. `create_card` can attach the returned hash while creating a note, and `attach_audio` can add it later.
+
+## Images
+
+`generate_image` takes a short stable `subject` (the cache key) and a `prompt` (the drawing instruction). Workers AI `flux-2-klein-4b` runs only on a cache miss. `tibia` and `Tibia` are the same subject; two different anatomy-book prompts for `tibia` share the first image. Use a different subject if you need a second view (`tibia anterior`). Attach with `create_card` `media.kind: "image"` or `attach_image`.
 
 Apply D1 migrations before deploying a version that uses audio:
 

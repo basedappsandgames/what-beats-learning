@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = "2";
+export const SCHEMA_VERSION = "3";
 
 export const SCHEMA_STATEMENTS = [
 	"PRAGMA foreign_keys = ON",
@@ -36,7 +36,7 @@ export const SCHEMA_STATEMENTS = [
 	`CREATE TABLE IF NOT EXISTS study_media (
 		note_id INTEGER NOT NULL REFERENCES study_notes(id) ON DELETE CASCADE,
 		field TEXT NOT NULL CHECK (field IN ('front', 'back', 'extra')),
-		kind TEXT NOT NULL CHECK (kind = 'audio'),
+		kind TEXT NOT NULL CHECK (kind IN ('audio', 'image')),
 		hash TEXT NOT NULL,
 		PRIMARY KEY (note_id, field, kind)
 	)`,

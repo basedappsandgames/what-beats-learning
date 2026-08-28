@@ -19,7 +19,7 @@ type Direction = "forward" | "reverse";
 export type NoteField = "front" | "back" | "extra";
 export type MediaAttachment = {
 	field: NoteField;
-	kind: "audio";
+	kind: "audio" | "image";
 	hash: string;
 };
 type Sql = DurableObjectStorage["sql"];
@@ -158,13 +158,18 @@ export class UserLibrary extends DurableObject<Env> {
 			this.sql.exec(statement);
 		}
 
-		const version = this.sql
+		let version = this.sql
 			.exec<{ value: string }>("SELECT value FROM study_meta WHERE key = 'schema_version'")
 			.toArray()[0]?.value;
 
 		if (version) {
 			if (version === SCHEMA_VERSION) return;
 			if (version === "1") {
+				this.setMeta("schema_version", "2");
+				version = "2";
+			}
+			if (version === "2") {
+				this.migrateStudyMediaKinds();
 				this.setMeta("schema_version", SCHEMA_VERSION);
 				return;
 			}
@@ -197,6 +202,19 @@ export class UserLibrary extends DurableObject<Env> {
 			}
 			this.setMeta("schema_version", SCHEMA_VERSION);
 		});
+	}
+
+	private migrateStudyMediaKinds(): void {
+		this.sql.exec(`CREATE TABLE study_media_v3 (
+			note_id INTEGER NOT NULL REFERENCES study_notes(id) ON DELETE CASCADE,
+			field TEXT NOT NULL CHECK (field IN ('front', 'back', 'extra')),
+			kind TEXT NOT NULL CHECK (kind IN ('audio', 'image')),
+			hash TEXT NOT NULL,
+			PRIMARY KEY (note_id, field, kind)
+		)`);
+		this.sql.exec("INSERT INTO study_media_v3 SELECT * FROM study_media");
+		this.sql.exec("DROP TABLE study_media");
+		this.sql.exec("ALTER TABLE study_media_v3 RENAME TO study_media");
 	}
 
 	private tableExists(name: string): boolean {
@@ -580,6 +598,19 @@ export class UserLibrary extends DurableObject<Env> {
 	}
 
 	async attachAudio(cardId: number, field: NoteField, hash: string) {
+		return this.attachMedia(cardId, field, "audio", hash);
+	}
+
+	async attachImage(cardId: number, field: NoteField, hash: string) {
+		return this.attachMedia(cardId, field, "image", hash);
+	}
+
+	private attachMedia(
+		cardId: number,
+		field: NoteField,
+		kind: "audio" | "image",
+		hash: string,
+	) {
 		const card = this.sql
 			.exec<{ note_id: number }>("SELECT note_id FROM study_cards WHERE id = ?", cardId)
 			.toArray()[0];
@@ -589,26 +620,28 @@ export class UserLibrary extends DurableObject<Env> {
 		const existing = this.sql
 			.exec<{ hash: string }>(
 				`SELECT hash FROM study_media
-				 WHERE note_id = ? AND field = ? AND kind = 'audio'`,
+				 WHERE note_id = ? AND field = ? AND kind = ?`,
 				noteId,
 				field,
+				kind,
 			)
 			.toArray()[0];
 		if (existing) {
 			if (existing.hash !== hash) {
-				throw new Error(`Note ${noteId} already has audio attached to ${field}`);
+				throw new Error(`Note ${noteId} already has ${kind} attached to ${field}`);
 			}
-			return { attached: false, already_attached: true, note_id: noteId, field, hash };
+			return { attached: false, already_attached: true, note_id: noteId, field, kind, hash };
 		}
 
 		this.sql.exec(
 			`INSERT INTO study_media (note_id, field, kind, hash)
-			 VALUES (?, ?, 'audio', ?)`,
+			 VALUES (?, ?, ?, ?)`,
 			noteId,
 			field,
+			kind,
 			hash,
 		);
-		return { attached: true, already_attached: false, note_id: noteId, field, hash };
+		return { attached: true, already_attached: false, note_id: noteId, field, kind, hash };
 	}
 
 	async getNextCard(): Promise<NextCardResult> {

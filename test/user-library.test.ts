@@ -6,6 +6,7 @@ describe("UserLibrary happy path", () => {
 		const library = env.USER_LIBRARY.getByName(`test:${crypto.randomUUID()}`);
 		const biologyAudio = "a".repeat(64);
 		const geographyAudio = "b".repeat(64);
+		const geographyImage = "c".repeat(64);
 		const batch = await library.createCards([
 			{
 				front: "What is photosynthesis?",
@@ -31,10 +32,13 @@ describe("UserLibrary happy path", () => {
 		expect((await library.addReverse([geographyCardId])).count_skipped).toBe(1);
 		expect(
 			await library.attachAudio(geographyCardId, "front", geographyAudio),
-		).toMatchObject({ attached: true, note_id: batch.created[1].note_id });
+		).toMatchObject({ attached: true, note_id: batch.created[1].note_id, kind: "audio" });
 		expect(
 			await library.attachAudio(geographyCardId, "front", geographyAudio),
 		).toMatchObject({ attached: false, already_attached: true });
+		expect(
+			await library.attachImage(geographyCardId, "front", geographyImage),
+		).toMatchObject({ attached: true, note_id: batch.created[1].note_id, kind: "image" });
 
 		const first = await library.getNextCard();
 		expect(first.empty).toBe(false);
@@ -52,6 +56,7 @@ describe("UserLibrary happy path", () => {
 		expect(second.direction).toBe("forward");
 		expect(second.front_media).toEqual([
 			{ field: "front", kind: "audio", hash: geographyAudio },
+			{ field: "front", kind: "image", hash: geographyImage },
 		]);
 		await library.updateSequence({ cardId: second.card_id, rating: "good" });
 

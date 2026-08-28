@@ -11,6 +11,7 @@ interface __BaseEnv_Env {
 	MINIMAX_API_KEY: string;
 	FISH_API_KEY: string;
 	PUBLIC_ORIGIN: string;
+	AI: Ai;
 	USER_LIBRARY: DurableObjectNamespace<import("./src/index").UserLibrary>;
 }
 declare namespace Cloudflare {

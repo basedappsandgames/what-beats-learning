@@ -46,6 +46,9 @@
 	"vars": {
 		"PUBLIC_ORIGIN": "https://whatbeatslearning.com"
 	},
+	"ai": {
+		"binding": "AI"
+	},
 	"r2_buckets": [
 		{
 			"bucket_name": "what-beats-learning-media",

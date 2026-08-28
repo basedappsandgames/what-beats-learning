@@ -3,10 +3,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	audioHash,
 	generateAudio,
+	generateImage,
+	imageHash,
+	normalizeImageSubject,
 	normalizeTtsText,
 	publicOrigin,
 	resolveVoice,
-	serveAudio,
+	serveMedia,
 } from "../src/media";
 
 describe("audio cache identity", () => {
@@ -115,9 +118,10 @@ describe("audio cache identity", () => {
 		expect(cached).toMatchObject({ cached: true, hash: created.hash, pace: "slow" });
 		expect(fetcher).toHaveBeenCalledTimes(1);
 
-		const response = await serveAudio(
+		const response = await serveMedia(
 			new Request(created.url, { headers: { Range: "bytes=1-2" } }),
 			env.MEDIA_BUCKET,
+			env.MEDIA_DB,
 			created.hash,
 		);
 		expect(response.status).toBe(206);
@@ -162,5 +166,86 @@ describe("audio cache identity", () => {
 			pace: "slow",
 		});
 		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("image cache identity", () => {
+	const png = new Uint8Array([1, 2, 3, 4]);
+
+	beforeAll(async () => {
+		await env.MEDIA_DB.prepare(`CREATE TABLE IF NOT EXISTS media_objects (
+			hash TEXT PRIMARY KEY,
+			kind TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			model TEXT NOT NULL,
+			voice TEXT NOT NULL,
+			lang TEXT NOT NULL,
+			source_text TEXT NOT NULL,
+			r2_key TEXT NOT NULL UNIQUE,
+			content_type TEXT NOT NULL,
+			byte_size INTEGER NOT NULL,
+			created_at INTEGER NOT NULL
+		)`).run();
+	});
+
+	it("normalizes subject case and whitespace, not the drawing prompt", () => {
+		expect(normalizeImageSubject("  Tibia  ")).toBe("tibia");
+		expect(normalizeImageSubject("TIBIA")).toBe("tibia");
+	});
+
+	it("hashes Tibia and tibia as the same subject", async () => {
+		expect(await imageHash(normalizeImageSubject("Tibia"))).toBe(
+			await imageHash(normalizeImageSubject("tibia")),
+		);
+	});
+
+	it("reuses the first image when the prompt differs", async () => {
+		const synthesize = vi.fn(async () => png);
+		const bindings = {
+			MEDIA_DB: env.MEDIA_DB,
+			MEDIA_BUCKET: env.MEDIA_BUCKET,
+			AI: env.AI,
+		};
+		const created = await generateImage(
+			bindings,
+			{
+				subject: "Tibia",
+				prompt:
+					"anatomy book image illustration of a tibia highlighted amongst a cross section of a leg",
+			},
+			"https://example.com",
+			synthesize,
+		);
+		const cached = await generateImage(
+			bindings,
+			{
+				subject: "tibia",
+				prompt: "clinical X-ray of a fractured tibia, anterior view, labeled",
+			},
+			"https://example.com",
+			synthesize,
+		);
+
+		expect(created.cached).toBe(false);
+		expect(created.subject).toBe("tibia");
+		expect(cached).toMatchObject({
+			cached: true,
+			hash: created.hash,
+			subject: "tibia",
+		});
+		expect(synthesize).toHaveBeenCalledTimes(1);
+		expect(synthesize).toHaveBeenCalledWith(
+			"anatomy book image illustration of a tibia highlighted amongst a cross section of a leg",
+		);
+
+		const response = await serveMedia(
+			new Request(created.url, { headers: { Range: "bytes=1-2" } }),
+			env.MEDIA_BUCKET,
+			env.MEDIA_DB,
+			created.hash,
+		);
+		expect(response.status).toBe(206);
+		expect(response.headers.get("content-type")).toBe("image/png");
+		expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([2, 3]);
 	});
 });

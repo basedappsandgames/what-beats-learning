@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp";
 import { z } from "zod";
 import { GoogleHandler } from "./google-handler";
-import { generateAudio, mediaUrl, publicOrigin, requireAudioHashes } from "./media";
+import { generateAudio, generateImage, mediaUrl, publicOrigin, requireAudioHashes, requireImageHashes } from "./media";
 import {
 	UserLibrary,
 	type CreateCardInput,
@@ -13,14 +13,14 @@ import {
 import { MCP_SESSION_INSTRUCTIONS } from "./pedagogy";
 import { jsonToolResult, type Props } from "./utils";
 
-const audioHash = z
+const mediaHash = z
 	.string()
 	.regex(/^[0-9a-f]{64}$/u)
-	.describe("Hash returned by generate_audio");
+	.describe("Hash returned by generate_audio or generate_image");
 const mediaInput = z.object({
 	field: z.enum(["front", "back", "extra"]),
-	kind: z.literal("audio").default("audio"),
-	hash: audioHash,
+	kind: z.enum(["audio", "image"]),
+	hash: mediaHash,
 });
 const cardInput = {
 	front: z.string().trim().min(1).describe("Cue the learner will see at recall time"),
@@ -39,9 +39,9 @@ const cardInput = {
 		.describe("Also create the reverse direction with its own FSRS schedule"),
 	media: z
 		.array(mediaInput)
-		.max(3)
+		.max(6)
 		.optional()
-		.describe("Generated audio to attach to a stored note field"),
+		.describe("Generated audio or image to attach to a stored note field. A field may have both."),
 };
 
 function requireProps(): Props {
@@ -83,7 +83,7 @@ async function observed<T>(tool: string, action: () => Promise<T>): Promise<T> {
 
 function addMediaUrls(result: NextCardResult, origin: string) {
 	if (result.empty) return result;
-	const withUrl = (item: { field: string; kind: "audio"; hash: string }) => ({
+	const withUrl = (item: { field: string; kind: "audio" | "image"; hash: string }) => ({
 		...item,
 		url: mediaUrl(origin, item.hash),
 	});
@@ -98,9 +98,14 @@ function addMediaUrls(result: NextCardResult, origin: string) {
 }
 
 async function validateCardMedia(env: Env, cards: CreateCardInput[]): Promise<void> {
+	const attachments = cards.flatMap((card) => card.media ?? []);
 	await requireAudioHashes(
 		env.MEDIA_DB,
-		cards.flatMap((card) => card.media?.map((media) => media.hash) ?? []),
+		attachments.filter((media) => media.kind === "audio").map((media) => media.hash),
+	);
+	await requireImageHashes(
+		env.MEDIA_DB,
+		attachments.filter((media) => media.kind === "image").map((media) => media.hash),
 	);
 }
 
@@ -139,7 +144,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"create_card",
-		"Create one atomic cue→answer note. Attach media returned by generate_audio to the stored front, back, or extra field. Pass reverse: true only when both retrieval directions matter.",
+		"Create one atomic cue→answer note. Attach media returned by generate_audio or generate_image to the stored front, back, or extra field. Pass reverse: true only when both retrieval directions matter.",
 		cardInput,
 		(input) =>
 			observed("create_card", async () => {
@@ -190,12 +195,53 @@ function createServer(env: Env, origin: string): McpServer {
 		{
 			card_id: z.number().int().positive(),
 			field: z.enum(["front", "back", "extra"]),
-			hash: audioHash,
+			hash: mediaHash,
 		},
 		({ card_id, field, hash }) =>
 			observed("attach_audio", async () => {
 				await requireAudioHashes(env.MEDIA_DB, [hash]);
 				return jsonToolResult(await libraryFor(env).attachAudio(card_id, field, hash));
+			}),
+	);
+
+	server.tool(
+		"generate_image",
+		"Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever. Reuse the same subject for the same fact even if you would write a different prompt.",
+		{
+			subject: z
+				.string()
+				.min(1)
+				.max(80)
+				.describe(
+					"Short stable concept label, e.g. tibia or Hartford. Not a scene description. Lowercased. Same subject = same image.",
+				),
+			prompt: z
+				.string()
+				.min(1)
+				.max(1500)
+				.describe(
+					"Full drawing instruction, e.g. anatomy-book illustration of a tibia highlighted among a cross-section of a leg. Used only if this subject is not already cached.",
+				),
+		},
+		(input) =>
+			observed("generate_image", async () => {
+				requireProps();
+				return jsonToolResult(await generateImage(env, input, origin));
+			}),
+	);
+
+	server.tool(
+		"attach_image",
+		"Attach an image previously returned by generate_image to one stored note field. The attachment applies to every card direction for that note.",
+		{
+			card_id: z.number().int().positive(),
+			field: z.enum(["front", "back", "extra"]),
+			hash: mediaHash,
+		},
+		({ card_id, field, hash }) =>
+			observed("attach_image", async () => {
+				await requireImageHashes(env.MEDIA_DB, [hash]);
+				return jsonToolResult(await libraryFor(env).attachImage(card_id, field, hash));
 			}),
 	);
 
