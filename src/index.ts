@@ -213,7 +213,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"get_next_card",
-		"Return the next due FSRS card. If empty is true, do not quiz. front is the learner cue; answer_for_teacher is private.",
+		"Return the next due FSRS card. If empty is true, do not quiz. When next_due is set, schedule a one-shot learner ping at that time if you can. front is the learner cue; answer_for_teacher is private.",
 		{},
 		() =>
 			observed("get_next_card", async () => {

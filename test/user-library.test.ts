@@ -60,5 +60,6 @@ describe("UserLibrary happy path", () => {
 		if (!empty.empty) throw new Error("Expected an empty due queue");
 		if (empty.next_due === null) throw new Error("Expected a future due date");
 		expect(new Date(empty.next_due).getTime()).toBeGreaterThan(Date.now());
+		expect(empty.hint).toContain(empty.next_due);
 	});
 });

@@ -82,6 +82,7 @@ type EmptyQueue = {
 	message: string;
 	next_due: string | null;
 	due_in_seconds: number | null;
+	hint?: string;
 };
 
 export type NextCardResult = ServedCard | EmptyQueue;
@@ -645,12 +646,14 @@ export class UserLibrary extends DurableObject<Env> {
 		}
 
 		const nextDue = Number(upcoming.due);
+		const dueAt = new Date(nextDue).toISOString();
 		const dueIn = Math.max(0, Math.ceil((nextDue - now) / 1000));
 		return {
 			empty: true,
-			message: `Nothing is due. Next card at ${new Date(nextDue).toISOString()}.`,
-			next_due: new Date(nextDue).toISOString(),
+			message: `Nothing is due. Next card at ${dueAt}.`,
+			next_due: dueAt,
 			due_in_seconds: dueIn,
+			hint: `If you can schedule a one-shot message to the learner, schedule it for ${dueAt} (next_due), then call get_next_card. Do not quiz now and do not poll.`,
 		};
 	}
 
