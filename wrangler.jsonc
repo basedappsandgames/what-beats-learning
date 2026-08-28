@@ -43,6 +43,9 @@
 	"dev": {
 		"port": 8788
 	},
+	"vars": {
+		"PUBLIC_ORIGIN": "https://whatbeatslearning.com"
+	},
 	"r2_buckets": [
 		{
 			"bucket_name": "what-beats-learning-media",

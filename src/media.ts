@@ -153,6 +153,16 @@ export function mediaUrl(origin: string, hash: string): string {
 	return new URL(`/media/${hash}`, origin).href;
 }
 
+export function publicOrigin(request: Request, configured?: string): string {
+	const requestUrl = new URL(request.url);
+	if (requestUrl.hostname === "localhost" || requestUrl.hostname === "127.0.0.1") {
+		return requestUrl.origin;
+	}
+	const trimmed = configured?.trim();
+	if (trimmed) return new URL(trimmed).origin;
+	return requestUrl.origin;
+}
+
 function resultFromRow(
 	row: MediaObjectRow,
 	origin: string,

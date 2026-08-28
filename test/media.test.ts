@@ -4,6 +4,7 @@ import {
 	audioHash,
 	generateAudio,
 	normalizeTtsText,
+	publicOrigin,
 	resolveVoice,
 	serveAudio,
 } from "../src/media";
@@ -51,6 +52,18 @@ describe("audio cache identity", () => {
 		expect(await audioHash("你好", resolveVoice("zh-CN", "normal"))).not.toBe(
 			await audioHash("你好", slow),
 		);
+	});
+
+	it("pins public media URLs to PUBLIC_ORIGIN except on localhost", () => {
+		expect(
+			publicOrigin(
+				new Request("https://what-beats-learning.bagapps.workers.dev/mcp"),
+				"https://whatbeatslearning.com/",
+			),
+		).toBe("https://whatbeatslearning.com");
+		expect(
+			publicOrigin(new Request("http://localhost:8788/mcp"), "https://whatbeatslearning.com"),
+		).toBe("http://localhost:8788");
 	});
 
 	it("routes Mandarin and Cantonese to their exact MiniMax voices", () => {

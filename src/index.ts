@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp";
 import { z } from "zod";
 import { GoogleHandler } from "./google-handler";
-import { generateAudio, mediaUrl, requireAudioHashes } from "./media";
+import { generateAudio, mediaUrl, publicOrigin, requireAudioHashes } from "./media";
 import {
 	UserLibrary,
 	type CreateCardInput,
@@ -296,7 +296,9 @@ function createServer(env: Env, origin: string): McpServer {
 
 const mcpHandler = {
 	fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return createMcpHandler(createServer(env, new URL(request.url).origin), { route: "/mcp" })(
+		return createMcpHandler(createServer(env, publicOrigin(request, env.PUBLIC_ORIGIN)), {
+			route: "/mcp",
+		})(
 			request,
 			env,
 			ctx,

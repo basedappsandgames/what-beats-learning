@@ -6,3 +6,6 @@ GOOGLE_CLIENT_SECRET=
 COOKIE_ENCRYPTION_KEY=
 MINIMAX_API_KEY=
 FISH_API_KEY=
+# Optional. Production sets https://whatbeatslearning.com in wrangler.jsonc.
+# Local wrangler dev ignores that and uses the request host.
+PUBLIC_ORIGIN=

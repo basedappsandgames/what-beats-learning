@@ -10,6 +10,7 @@ interface __BaseEnv_Env {
 	COOKIE_ENCRYPTION_KEY: string;
 	MINIMAX_API_KEY: string;
 	FISH_API_KEY: string;
+	PUBLIC_ORIGIN: string;
 	USER_LIBRARY: DurableObjectNamespace<import("./src/index").UserLibrary>;
 }
 declare namespace Cloudflare {
