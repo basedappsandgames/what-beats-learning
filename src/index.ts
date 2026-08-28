@@ -10,6 +10,7 @@ import {
 	type NextCardResult,
 	type UpdateSequenceInput,
 } from "./user-library";
+import { MCP_SESSION_INSTRUCTIONS } from "./pedagogy";
 import { jsonToolResult, type Props } from "./utils";
 
 const audioHash = z
@@ -104,23 +105,34 @@ async function validateCardMedia(env: Env, cards: CreateCardInput[]): Promise<vo
 }
 
 function createServer(env: Env, origin: string): McpServer {
-	const server = new McpServer({
-		name: "what-beats-learning",
-		version: "0.5.0",
-	});
+	const server = new McpServer(
+		{
+			name: "what-beats-learning",
+			version: "0.5.0",
+		},
+		{ instructions: MCP_SESSION_INSTRUCTIONS },
+	);
 
 	server.tool(
 		"whoami",
-		"Return the signed-in Google account and counts from this user's isolated library.",
+		"Call at session start. Returns the signed-in Google account and library counts. If empty_library is true, onboard — do not quiz.",
 		{},
 		() =>
 			observed("whoami", async () => {
 				const props = requireProps();
+				const library = await libraryFor(env).whoami();
+				const empty_library = library.cardCount === 0;
 				return jsonToolResult({
 					name: props.name,
 					email: props.email,
 					google_id: props.googleId,
-					library: await libraryFor(env).whoami(),
+					library,
+					empty_library,
+					...(empty_library
+						? {
+								next: "The learner just connected with no cards. Do not quiz. Ask what topic they want to learn, then their skill level and familiarity. After they answer, create a small first deck.",
+							}
+						: {}),
 				});
 			}),
 	);

@@ -245,7 +245,8 @@ export function renderApprovalDialog(
 </html>`,
 		{
 			headers: {
-				"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+				// Chrome applies form-action to the POST's 302 Location, so Google must be listed or Authorize appears to do nothing.
+				"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'",
 				"Content-Type": "text/html; charset=utf-8",
 				"Set-Cookie": options.setCookie,
 				"X-Frame-Options": "DENY",
