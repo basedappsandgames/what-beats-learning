@@ -305,6 +305,7 @@ export default new OAuthProvider({
 	apiHandler: mcpHandler,
 	authorizeEndpoint: "/authorize",
 	clientRegistrationEndpoint: "/register",
+	clientIdMetadataDocumentEnabled: true,
 	defaultHandler: authHandler,
 	tokenEndpoint: "/token",
 	onError(error) {
