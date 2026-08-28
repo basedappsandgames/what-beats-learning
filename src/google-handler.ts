@@ -30,9 +30,13 @@ app.get("/", (c) => {
     body { font-family: Georgia, "Times New Roman", serif; margin: 0; background: #f4efe6; color: #1f1a14; }
     main { max-width: 40rem; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
     h1 { font-size: 2.1rem; letter-spacing: -0.02em; margin-bottom: 0.35rem; }
+    h2 { font-size: 1.35rem; margin: 2.1rem 0 0.6rem; }
+    h3 { font-size: 1.08rem; margin: 1.5rem 0 0.4rem; }
     p.lede { font-size: 1.15rem; line-height: 1.45; color: #4a4036; }
+    p, li { line-height: 1.55; }
     code, .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; background: #efe6d8; padding: 0.12em 0.35em; border-radius: 4px; }
-    ul { line-height: 1.55; }
+    pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; background: #efe6d8; padding: 0.85rem 1rem; border-radius: 6px; white-space: pre-wrap; overflow-x: auto; line-height: 1.45; }
+    ol { padding-left: 1.25rem; }
     a { color: #8a2f12; }
     footer { margin-top: 2.5rem; font-size: 0.9rem; color: #6b5e50; }
   </style>
@@ -40,11 +44,41 @@ app.get("/", (c) => {
 <body>
   <main>
     <h1>What Beats Learning</h1>
-    <p class="lede">A remote MCP for spaced-repetition tutoring. Sign in with Google, then point your agent at the streamable HTTP URL.</p>
-    <p>Connect (OAuth required):</p>
-    <ul>
-      <li>Streamable HTTP: <span class="url">${origin}/mcp</span></li>
-    </ul>
+    <p class="lede">A remote MCP for spaced-repetition tutoring. Connect your agent, sign in with Google, then ask it to make flashcards.</p>
+    <p>MCP URL: <span class="url">${origin}/mcp</span></p>
+
+    <h2>Install</h2>
+
+    <h3>Grok Bot</h3>
+    <p>Tell your Bot:</p>
+    <pre>please add this MCP and then prompt me to auth it: "url": "${origin}/mcp"</pre>
+    <p>Then sign in with Google and ask Bot to make you any flashcards you want.</p>
+
+    <h3>Claude</h3>
+    <ol>
+      <li>Go to Customize → Connectors → Add custom connector.</li>
+      <li>Name it What Beats Learning and paste <span class="url">${origin}/mcp</span>.</li>
+      <li>Select the recommended settings, then Continue.</li>
+      <li>Authorize, sign in with Google, and ask Claude to make any flashcards you want.</li>
+    </ol>
+
+    <h3>Cursor</h3>
+    <p>Open Customize → MCPs (or Cursor Settings → MCP). Add a custom server with:</p>
+    <pre>{
+  "mcpServers": {
+    "what-beats-learning": {
+      "url": "${origin}/mcp"
+    }
+  }
+}</pre>
+    <p>Connect, sign in with Google, then ask Cursor to make you any flashcards you want.</p>
+
+    <h3>Codex</h3>
+    <p>In a terminal:</p>
+    <pre>codex mcp add what-beats-learning --url ${origin}/mcp
+codex mcp login what-beats-learning</pre>
+    <p>Sign in with Google when prompted. In the ChatGPT desktop app, you can instead go to Settings → MCP servers and paste <span class="url">${origin}/mcp</span>. Then ask Codex to make you any flashcards you want.</p>
+
     <p>Each Google account gets its own isolated SQLite library with FSRS scheduling. Other users cannot read or write it.</p>
     <footer>
       Sign-in happens when an MCP client starts the OAuth flow — there is no separate login page.
