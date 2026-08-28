@@ -1,6 +1,7 @@
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { privacyPolicyPage, termsOfServicePage } from "./legal-pages";
+import { serveAudio } from "./media";
 import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl, type Props } from "./utils";
 import {
 	addApprovedClient,
@@ -56,6 +57,9 @@ app.get("/", (c) => {
 
 app.get("/docs/privacy", (c) => c.html(privacyPolicyPage()));
 app.get("/docs/terms", (c) => c.html(termsOfServicePage()));
+app.on(["GET", "HEAD"], "/media/:hash", (c) =>
+	serveAudio(c.req.raw, c.env.MEDIA_BUCKET, c.req.param("hash")),
+);
 
 app.get("/authorize", async (c) => {
 	const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);

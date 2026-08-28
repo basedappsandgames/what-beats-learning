@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = "1";
+export const SCHEMA_VERSION = "2";
 
 export const SCHEMA_STATEMENTS = [
 	"PRAGMA foreign_keys = ON",
@@ -32,6 +32,13 @@ export const SCHEMA_STATEMENTS = [
 		lapses INTEGER NOT NULL,
 		state INTEGER NOT NULL,
 		last_review INTEGER
+	)`,
+	`CREATE TABLE IF NOT EXISTS study_media (
+		note_id INTEGER NOT NULL REFERENCES study_notes(id) ON DELETE CASCADE,
+		field TEXT NOT NULL CHECK (field IN ('front', 'back', 'extra')),
+		kind TEXT NOT NULL CHECK (kind = 'audio'),
+		hash TEXT NOT NULL,
+		PRIMARY KEY (note_id, field, kind)
 	)`,
 	`CREATE INDEX IF NOT EXISTS study_schedules_due ON study_schedules (due, state)`,
 	`CREATE INDEX IF NOT EXISTS study_cards_deck ON study_cards (deck_id)`,

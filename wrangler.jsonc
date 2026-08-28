@@ -3,20 +3,30 @@
 	"name": "what-beats-learning",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-08-27",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_sqlite_classes": ["WhatBeatsLearning", "UserLibrary"]
+			"new_sqlite_classes": [
+				"WhatBeatsLearning",
+				"UserLibrary"
+			]
 		},
 		{
 			"tag": "v2",
-			"deleted_classes": ["WhatBeatsLearning"]
+			"deleted_classes": [
+				"WhatBeatsLearning"
+			]
 		}
 	],
 	"durable_objects": {
 		"bindings": [
-			{ "name": "USER_LIBRARY", "class_name": "UserLibrary" }
+			{
+				"name": "USER_LIBRARY",
+				"class_name": "UserLibrary"
+			}
 		]
 	},
 	"kv_namespaces": [
@@ -31,5 +41,19 @@
 	},
 	"dev": {
 		"port": 8788
-	}
+	},
+	"r2_buckets": [
+		{
+			"bucket_name": "what-beats-learning-media",
+			"binding": "MEDIA_BUCKET"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "MEDIA_DB",
+			"database_name": "what-beats-learning-media",
+			"database_id": "c96647fc-cda8-4e64-9968-e75e54c88590",
+			"migrations_dir": "migrations"
+		}
+	]
 }

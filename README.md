@@ -31,6 +31,8 @@ MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mc
 |------|---------|
 | `create_card` | One atomic cue→answer note. `reverse: true` adds a delayed reverse |
 | `create_cards` | Atomically create up to 50 notes |
+| `generate_audio` | Generate or reuse a globally cached pronunciation clip |
+| `attach_audio` | Attach generated audio to an existing note field |
 | `add_reverse` | Add a delayed reverse for existing `card_ids` (idempotent) |
 | `get_next_card` | Next due review, else a new card. `empty: true` if nothing is due |
 | `update_sequence` | Grade a specific `card_id`; `rating` is required |
@@ -40,6 +42,18 @@ MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mc
 | `whoami` | Signed-in identity + card counts |
 
 Isolation: the library Durable Object is keyed by the Google subject in the verified OAuth token. Tool arguments never select another user's database.
+
+## Audio
+
+`generate_audio` requires explicit text and a BCP-47 language tag. Mandarin uses MiniMax `speech-2.8-turbo` with `Chinese_patitent_teacher`; Cantonese uses `Cantonese_KindWoman`; other languages use Fish Audio `s2.1-pro-free`. Provider failures are returned directly—there is no cross-provider fallback.
+
+Pace is one of `slowest` (0.65×), `slow` (0.8×, default), or `normal` (1×). Cache identity uses NFC-normalized, trimmed text with whitespace runs collapsed to one space, plus language, pace, provider, model, and voice. R2 stores the MP3 once and D1 stores its metadata. `create_card` can attach the returned hash while creating a note, and `attach_audio` can add it later.
+
+Apply D1 migrations before deploying a version that uses audio:
+
+```bash
+npx wrangler d1 migrations apply what-beats-learning-media --remote
+```
 
 ## Google OAuth (you do this)
 
@@ -63,6 +77,8 @@ Create **two** OAuth 2.0 Web application clients: one for local, one for product
    GOOGLE_CLIENT_ID=...
    GOOGLE_CLIENT_SECRET=...
    COOKIE_ENCRYPTION_KEY=<already set, or openssl rand -hex 32>
+   MINIMAX_API_KEY=...
+   FISH_API_KEY=...
    ```
 
 5. Production secrets (cookie key is already set):
@@ -70,6 +86,8 @@ Create **two** OAuth 2.0 Web application clients: one for local, one for product
    ```bash
    npx wrangler secret put GOOGLE_CLIENT_ID
    npx wrangler secret put GOOGLE_CLIENT_SECRET
+   npx wrangler secret put MINIMAX_API_KEY
+   npx wrangler secret put FISH_API_KEY
    ```
 
 ## Local dev
@@ -87,6 +105,6 @@ npm run type-check
 
 ## Schema
 
-The runtime has five tables: decks, notes, cards, FSRS schedules, and metadata. Existing v0.3 libraries are migrated from the old Anki-shaped tables when their Durable Object next starts.
+Each user library has decks, notes, cards, FSRS schedules, note media references, and metadata. Existing libraries add the media-reference table when their Durable Object next starts. Generated audio bytes are stored once in R2; a global D1 table indexes each clip by a hash of its normalized text, language, provider, model, and voice.
 
 Scheduling uses [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs). Each direction has its own schedule. Reverse cards start one day later so the forward answer is not immediately tested as a cue. `update_sequence` requires the calling LLM to pass `again | hard | good | easy`; the Worker does not infer ratings.

@@ -16,6 +16,12 @@ const REVERSE_DELAY_MS = 24 * 60 * 60 * 1000;
 
 export type RatingName = "again" | "hard" | "good" | "easy";
 type Direction = "forward" | "reverse";
+export type NoteField = "front" | "back" | "extra";
+export type MediaAttachment = {
+	field: NoteField;
+	kind: "audio";
+	hash: string;
+};
 type Sql = DurableObjectStorage["sql"];
 
 const RATING_TO_ENUM: Record<RatingName, Grade> = {
@@ -62,9 +68,11 @@ type ServedCard = {
 	lapses: number;
 	queue_reason: "review_due" | "new_card";
 	tags: string;
+	front_media: MediaAttachment[];
 	answer_for_teacher: {
 		back: string;
 		extra: string | null;
+		media: MediaAttachment[];
 		note: string;
 	};
 };
@@ -85,6 +93,7 @@ export type CreateCardInput = {
 	tags?: string;
 	extra?: string;
 	reverse?: boolean;
+	media?: MediaAttachment[];
 };
 
 export type UpdateSequenceInput = {
@@ -153,10 +162,12 @@ export class UserLibrary extends DurableObject<Env> {
 			.toArray()[0]?.value;
 
 		if (version) {
-			if (version !== SCHEMA_VERSION) {
-				throw new Error(`Unsupported study schema version ${version}`);
+			if (version === SCHEMA_VERSION) return;
+			if (version === "1") {
+				this.setMeta("schema_version", SCHEMA_VERSION);
+				return;
 			}
-			return;
+			throw new Error(`Unsupported study schema version ${version}`);
 		}
 
 		const rowCount = this.sql
@@ -418,6 +429,16 @@ export class UserLibrary extends DurableObject<Env> {
 				)
 				.one().id,
 		);
+		for (const media of input.media ?? []) {
+			this.sql.exec(
+				`INSERT INTO study_media (note_id, field, kind, hash)
+				 VALUES (?, ?, ?, ?)`,
+				noteId,
+				media.field,
+				media.kind,
+				media.hash,
+			);
+		}
 
 		const forwardId = this.insertCard(noteId, deck.id, "forward", now);
 		const cards: {
@@ -452,6 +473,7 @@ export class UserLibrary extends DurableObject<Env> {
 			note_id: noteId,
 			deck: deck.name,
 			extra,
+			media: input.media ?? [],
 			cards,
 		};
 	}
@@ -554,6 +576,38 @@ export class UserLibrary extends DurableObject<Env> {
 				count_skipped: skipped.length,
 			};
 		});
+	}
+
+	async attachAudio(cardId: number, field: NoteField, hash: string) {
+		const card = this.sql
+			.exec<{ note_id: number }>("SELECT note_id FROM study_cards WHERE id = ?", cardId)
+			.toArray()[0];
+		if (!card) throw new Error(`Unknown card_id ${cardId}`);
+
+		const noteId = Number(card.note_id);
+		const existing = this.sql
+			.exec<{ hash: string }>(
+				`SELECT hash FROM study_media
+				 WHERE note_id = ? AND field = ? AND kind = 'audio'`,
+				noteId,
+				field,
+			)
+			.toArray()[0];
+		if (existing) {
+			if (existing.hash !== hash) {
+				throw new Error(`Note ${noteId} already has audio attached to ${field}`);
+			}
+			return { attached: false, already_attached: true, note_id: noteId, field, hash };
+		}
+
+		this.sql.exec(
+			`INSERT INTO study_media (note_id, field, kind, hash)
+			 VALUES (?, ?, 'audio', ?)`,
+			noteId,
+			field,
+			hash,
+		);
+		return { attached: true, already_attached: false, note_id: noteId, field, hash };
 	}
 
 	async getNextCard(): Promise<NextCardResult> {
@@ -797,6 +851,15 @@ export class UserLibrary extends DurableObject<Env> {
 			)
 			.one();
 		const direction = directionName(row.direction);
+		const media = this.sql
+			.exec<MediaAttachment>(
+				`SELECT field, kind, hash FROM study_media
+				 WHERE note_id = ? ORDER BY field, kind`,
+				row.note_id,
+			)
+			.toArray();
+		const frontField = direction === "forward" ? "front" : "back";
+		const backField = direction === "forward" ? "back" : "front";
 
 		return {
 			empty: false,
@@ -811,9 +874,11 @@ export class UserLibrary extends DurableObject<Env> {
 			lapses: Number(row.lapses),
 			queue_reason: queueReason,
 			tags: row.tags,
+			front_media: media.filter((item) => item.field === frontField),
 			answer_for_teacher: {
 				back: direction === "forward" ? row.back : row.front,
 				extra: row.extra,
+				media: media.filter((item) => item.field === backField || item.field === "extra"),
 				note: "Private. Never put this answer in the learner-facing prompt.",
 			},
 		};

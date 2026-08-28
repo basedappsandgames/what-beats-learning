@@ -3,9 +3,24 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp";
 import { z } from "zod";
 import { GoogleHandler } from "./google-handler";
-import { UserLibrary, type UpdateSequenceInput } from "./user-library";
+import { generateAudio, mediaUrl, requireAudioHashes } from "./media";
+import {
+	UserLibrary,
+	type CreateCardInput,
+	type NextCardResult,
+	type UpdateSequenceInput,
+} from "./user-library";
 import { jsonToolResult, type Props } from "./utils";
 
+const audioHash = z
+	.string()
+	.regex(/^[0-9a-f]{64}$/u)
+	.describe("Hash returned by generate_audio");
+const mediaInput = z.object({
+	field: z.enum(["front", "back", "extra"]),
+	kind: z.literal("audio").default("audio"),
+	hash: audioHash,
+});
 const cardInput = {
 	front: z.string().trim().min(1).describe("Cue the learner will see at recall time"),
 	back: z.string().trim().min(1).describe("Answer they must produce"),
@@ -21,6 +36,11 @@ const cardInput = {
 		.boolean()
 		.optional()
 		.describe("Also create the reverse direction with its own FSRS schedule"),
+	media: z
+		.array(mediaInput)
+		.max(3)
+		.optional()
+		.describe("Generated audio to attach to a stored note field"),
 };
 
 function requireProps(): Props {
@@ -60,10 +80,33 @@ async function observed<T>(tool: string, action: () => Promise<T>): Promise<T> {
 	}
 }
 
-function createServer(env: Env): McpServer {
+function addMediaUrls(result: NextCardResult, origin: string) {
+	if (result.empty) return result;
+	const withUrl = (item: { field: string; kind: "audio"; hash: string }) => ({
+		...item,
+		url: mediaUrl(origin, item.hash),
+	});
+	return {
+		...result,
+		front_media: result.front_media.map(withUrl),
+		answer_for_teacher: {
+			...result.answer_for_teacher,
+			media: result.answer_for_teacher.media.map(withUrl),
+		},
+	};
+}
+
+async function validateCardMedia(env: Env, cards: CreateCardInput[]): Promise<void> {
+	await requireAudioHashes(
+		env.MEDIA_DB,
+		cards.flatMap((card) => card.media?.map((media) => media.hash) ?? []),
+	);
+}
+
+function createServer(env: Env, origin: string): McpServer {
 	const server = new McpServer({
 		name: "what-beats-learning",
-		version: "0.4.0",
+		version: "0.5.0",
 	});
 
 	server.tool(
@@ -84,12 +127,13 @@ function createServer(env: Env): McpServer {
 
 	server.tool(
 		"create_card",
-		"Create one atomic cue→answer note. Pass reverse: true only when both retrieval directions matter; the reverse is delayed and scheduled independently.",
+		"Create one atomic cue→answer note. Attach media returned by generate_audio to the stored front, back, or extra field. Pass reverse: true only when both retrieval directions matter.",
 		cardInput,
 		(input) =>
-			observed("create_card", async () =>
-				jsonToolResult(await libraryFor(env).createCard(input)),
-			),
+			observed("create_card", async () => {
+				await validateCardMedia(env, [input]);
+				return jsonToolResult(await libraryFor(env).createCard(input));
+			}),
 	);
 
 	server.tool(
@@ -99,9 +143,48 @@ function createServer(env: Env): McpServer {
 			cards: z.array(z.object(cardInput)).min(1).max(50),
 		},
 		({ cards }) =>
-			observed("create_cards", async () =>
-				jsonToolResult(await libraryFor(env).createCards(cards)),
-			),
+			observed("create_cards", async () => {
+				await validateCardMedia(env, cards);
+				return jsonToolResult(await libraryFor(env).createCards(cards));
+			}),
+	);
+
+	server.tool(
+		"generate_audio",
+		"Get or create a cached pronunciation clip without creating a card. Default pace is slow. Use slowest for first encounters, normal for real-speed listening. Attach the returned hash only if the learner saves a card.",
+		{
+			text: z.string().min(1).max(500).describe("Exact text to speak"),
+			lang: z
+				.string()
+				.trim()
+				.min(2)
+				.max(35)
+				.describe("BCP-47 language tag; use zh-CN for Mandarin or yue for Cantonese"),
+			pace: z
+				.enum(["slowest", "slow", "normal"])
+				.optional()
+				.describe("Speaking speed. Defaults to slow. slowest = 0.65x, slow = 0.8x, normal = 1x"),
+		},
+		(input) =>
+			observed("generate_audio", async () => {
+				requireProps();
+				return jsonToolResult(await generateAudio(env, input, origin));
+			}),
+	);
+
+	server.tool(
+		"attach_audio",
+		"Attach audio previously returned by generate_audio to one stored note field. The attachment applies to every card direction for that note.",
+		{
+			card_id: z.number().int().positive(),
+			field: z.enum(["front", "back", "extra"]),
+			hash: audioHash,
+		},
+		({ card_id, field, hash }) =>
+			observed("attach_audio", async () => {
+				await requireAudioHashes(env.MEDIA_DB, [hash]);
+				return jsonToolResult(await libraryFor(env).attachAudio(card_id, field, hash));
+			}),
 	);
 
 	server.tool(
@@ -121,9 +204,10 @@ function createServer(env: Env): McpServer {
 		"Return the next due FSRS card. If empty is true, do not quiz. front is the learner cue; answer_for_teacher is private.",
 		{},
 		() =>
-			observed("get_next_card", async () =>
-				jsonToolResult(await libraryFor(env).getNextCard()),
-			),
+			observed("get_next_card", async () => {
+				const card = await libraryFor(env).getNextCard();
+				return jsonToolResult(addMediaUrls(card, origin));
+			}),
 	);
 
 	server.tool(
@@ -200,7 +284,11 @@ function createServer(env: Env): McpServer {
 
 const mcpHandler = {
 	fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return createMcpHandler(createServer(env), { route: "/mcp" })(request, env, ctx);
+		return createMcpHandler(createServer(env, new URL(request.url).origin), { route: "/mcp" })(
+			request,
+			env,
+			ctx,
+		);
 	},
 } satisfies ExportedHandler<Env>;
 

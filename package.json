@@ -1,6 +1,6 @@
 {
 	"name": "what-beats-learning",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"private": true,
 	"type": "module",
 	"description": "What Beats Learning — remote MCP server for spaced-repetition study, with Google OAuth.",
@@ -11,7 +11,7 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"cf-typegen": "wrangler types",
+		"cf-typegen": "wrangler types --env-file .dev.vars.example",
 		"test": "vitest run",
 		"type-check": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json"
 	},
