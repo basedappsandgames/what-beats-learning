@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local wrangler dev.
+# Create a Google OAuth Web client (see README) first.
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+COOKIE_ENCRYPTION_KEY=

@@ -1,0 +1,35 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "what-beats-learning",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-08-27",
+	"compatibility_flags": ["nodejs_compat"],
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["WhatBeatsLearning", "UserLibrary"]
+		},
+		{
+			"tag": "v2",
+			"deleted_classes": ["WhatBeatsLearning"]
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "USER_LIBRARY", "class_name": "UserLibrary" }
+		]
+	},
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "05cf4268388042589a5b2a0a2fceb445"
+		}
+	],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	"dev": {
+		"port": 8788
+	}
+}
