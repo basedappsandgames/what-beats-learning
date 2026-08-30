@@ -45,7 +45,7 @@ export function privacyPolicyPage(): string {
 <h2>Information we collect</h2>
 <ul>
   <li><strong>Google account information.</strong> When you sign in with Google, we receive your Google account identifier, name, and email address. We do not receive or store your Google password.</li>
-  <li><strong>Learning content.</strong> We store the decks, cards, tags, prompts, review history, scheduling data, and generated audio and images that you or your connected AI agent create through the Service. Text submitted for speech is sent to our speech provider and stored with the resulting clip in a shared content-addressed cache, so identical requests can reuse one clip. Image subjects and drawing prompts are sent to Cloudflare Workers AI; the resulting image is stored in a shared cache keyed by subject, so later requests for the same subject reuse the first image.</li>
+  <li><strong>Learning content.</strong> We store the decks, cards, tags, prompts, review history, scheduling data, and generated audio and images that you or your connected AI agent create through the Service. Text submitted for speech is sent to our speech provider and stored with the resulting clip in a shared content-addressed cache, so identical requests can reuse one clip. Image subjects and drawing prompts are sent to Cloudflare Workers AI; the resulting image is stored in a shared cache keyed by subject, so later requests for the same subject reuse the first image. When you import an image URL (for example from a host image tool), we fetch that URL and store the image bytes in a shared content-addressed cache.</li>
   <li><strong>Authorization data.</strong> We process OAuth tokens, client approvals, and strictly necessary cookies so that you can sign in and connect an MCP client.</li>
   <li><strong>Operational data.</strong> Our infrastructure provider may process request metadata such as IP address, user agent, timestamps, and error or security logs to deliver and protect the Service.</li>
 </ul>
@@ -64,6 +64,7 @@ export function privacyPolicyPage(): string {
   <li>to Cloudflare, which hosts the Service and its storage;</li>
   <li>to MiniMax or Fish Audio when you ask the Service to generate speech;</li>
   <li>to Cloudflare Workers AI when you ask the Service to generate an image;</li>
+  <li>to the image host at a URL you ask the Service to import, solely to fetch that image;</li>
   <li>to the MCP client and AI agent you authorize, as described above;</li>
   <li>when required by law or reasonably necessary to protect users, the Service, or others; or</li>
   <li>in connection with a merger, acquisition, financing, or transfer of the Service, subject to this policy or notice of a replacement policy.</li>
