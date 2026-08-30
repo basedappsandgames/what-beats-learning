@@ -5,8 +5,12 @@ const IMAGE_CONTENT_TYPE = "image/png";
 const MAX_TEXT_LENGTH = 500;
 const MAX_IMAGE_SUBJECT_LENGTH = 80;
 const MAX_IMAGE_PROMPT_LENGTH = 1500;
+const MAX_IMPORT_URL_LENGTH = 2048;
+const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
 const IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 const IMAGE_PROVIDER = "workers-ai";
+const IMPORT_PROVIDER = "import";
+const IMPORT_MODEL = "url";
 const IMAGE_WIDTH = 1024;
 const IMAGE_HEIGHT = 1024;
 const MINIMAX_MODEL = "speech-2.8-turbo";
@@ -81,6 +85,15 @@ export type ImageResult = {
 	subject: string;
 	width: number;
 	height: number;
+};
+
+export type ImportedImageResult = {
+	hash: string;
+	url: string;
+	cached: boolean;
+	provider: "import";
+	model: "url";
+	subject: string;
 };
 
 export function normalizeTtsText(text: string): string {
@@ -522,6 +535,186 @@ export async function generateImage(
 		subject,
 		width: IMAGE_WIDTH,
 		height: IMAGE_HEIGHT,
+	};
+}
+
+/** Require a parseable https URL. */
+export function requireHttpsImageUrl(urlString: string): URL {
+	if (urlString.length > MAX_IMPORT_URL_LENGTH) {
+		throw new Error(`Image URL cannot exceed ${MAX_IMPORT_URL_LENGTH} characters`);
+	}
+	let url: URL;
+	try {
+		url = new URL(urlString.trim());
+	} catch {
+		throw new Error("Invalid image URL");
+	}
+	if (url.protocol !== "https:") throw new Error("Image URL must use https");
+	return url;
+}
+
+export function sniffImageContent(
+	bytes: Uint8Array,
+): { contentType: string; extension: string } | null {
+	if (
+		bytes.length >= 8 &&
+		bytes[0] === 0x89 &&
+		bytes[1] === 0x50 &&
+		bytes[2] === 0x4e &&
+		bytes[3] === 0x47
+	) {
+		return { contentType: "image/png", extension: "png" };
+	}
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+		return { contentType: "image/jpeg", extension: "jpg" };
+	}
+	if (
+		bytes.length >= 6 &&
+		bytes[0] === 0x47 &&
+		bytes[1] === 0x49 &&
+		bytes[2] === 0x46 &&
+		bytes[3] === 0x38 &&
+		(bytes[4] === 0x37 || bytes[4] === 0x39) &&
+		bytes[5] === 0x61
+	) {
+		return { contentType: "image/gif", extension: "gif" };
+	}
+	if (
+		bytes.length >= 12 &&
+		bytes[0] === 0x52 &&
+		bytes[1] === 0x49 &&
+		bytes[2] === 0x46 &&
+		bytes[3] === 0x46 &&
+		bytes[8] === 0x57 &&
+		bytes[9] === 0x45 &&
+		bytes[10] === 0x42 &&
+		bytes[11] === 0x50
+	) {
+		return { contentType: "image/webp", extension: "webp" };
+	}
+	return null;
+}
+
+async function readBodyLimited(response: Response, maxBytes: number): Promise<Uint8Array> {
+	if (!response.body) throw new Error("Image response had no body");
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		total += value.byteLength;
+		if (total > maxBytes) {
+			await reader.cancel();
+			throw new Error(`Image exceeds maximum size of ${maxBytes} bytes`);
+		}
+		chunks.push(value);
+	}
+	const bytes = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return bytes;
+}
+
+async function fetchImageBytes(
+	urlString: string,
+	fetcher: typeof fetch,
+): Promise<Uint8Array> {
+	const url = requireHttpsImageUrl(urlString).href;
+	const response = await fetcher(url, {
+		method: "GET",
+		headers: { Accept: "image/*" },
+	});
+	if (!response.ok) throw new Error(`Image fetch failed with HTTP ${response.status}`);
+	const bytes = await readBodyLimited(response, MAX_IMPORT_BYTES);
+	if (bytes.length === 0) throw new Error("Image response was empty");
+	return bytes;
+}
+
+export async function importedImageHash(bytes: Uint8Array): Promise<string> {
+	const digest = await crypto.subtle.digest("SHA-256", bytes);
+	return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Fetch an externally generated image (Grok Imagine, Cursor, etc.), store it in
+ * R2, and return an attachable hash. Cache identity is the content hash.
+ */
+export async function importImage(
+	env: { MEDIA_BUCKET: R2Bucket; MEDIA_DB: D1Database },
+	input: { url: string; subject: string },
+	origin: string,
+	fetcher: typeof fetch = fetch,
+): Promise<ImportedImageResult> {
+	const subject = normalizeImageSubject(input.subject);
+	const bytes = await fetchImageBytes(input.url, fetcher);
+	const sniffed = sniffImageContent(bytes);
+	if (!sniffed) {
+		throw new Error("URL did not return a PNG, JPEG, GIF, or WebP image");
+	}
+	const hash = await importedImageHash(bytes);
+	const existing = await env.MEDIA_DB.prepare(
+		`SELECT hash, kind, provider, model, voice, lang, source_text,
+				r2_key, content_type, byte_size, created_at
+		 FROM media_objects WHERE hash = ?`,
+	)
+		.bind(hash)
+		.first<MediaObjectRow>();
+	if (existing) {
+		if (existing.kind !== IMAGE_KIND) throw new Error(`Unexpected media kind ${existing.kind}`);
+		return {
+			hash: existing.hash,
+			url: mediaUrl(origin, existing.hash),
+			cached: true,
+			provider: IMPORT_PROVIDER,
+			model: IMPORT_MODEL,
+			subject: existing.source_text,
+		};
+	}
+
+	const r2Key = `${IMAGE_KIND}/${hash}.${sniffed.extension}`;
+	const object = await env.MEDIA_BUCKET.put(r2Key, bytes, {
+		httpMetadata: {
+			contentType: sniffed.contentType,
+			cacheControl: "public, max-age=31536000, immutable",
+		},
+		customMetadata: { hash, provider: IMPORT_PROVIDER, subject },
+	});
+	if (!object) throw new Error("R2 did not store imported image");
+
+	const createdAt = Date.now();
+	await env.MEDIA_DB.prepare(
+		`INSERT INTO media_objects
+			(hash, kind, provider, model, voice, lang, source_text, r2_key,
+			 content_type, byte_size, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(hash) DO NOTHING`,
+	)
+		.bind(
+			hash,
+			IMAGE_KIND,
+			IMPORT_PROVIDER,
+			IMPORT_MODEL,
+			"",
+			"",
+			subject,
+			r2Key,
+			sniffed.contentType,
+			object.size,
+			createdAt,
+		)
+		.run();
+
+	return {
+		hash,
+		url: mediaUrl(origin, hash),
+		cached: false,
+		provider: IMPORT_PROVIDER,
+		model: IMPORT_MODEL,
+		subject,
 	};
 }
 

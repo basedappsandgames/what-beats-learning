@@ -33,8 +33,9 @@ MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mc
 | `create_cards` | Atomically create up to 50 notes |
 | `generate_audio` | Generate or reuse a globally cached pronunciation clip |
 | `attach_audio` | Attach generated audio to an existing note field |
-| `generate_image` | Generate or reuse a cached study image (Workers AI Flux) |
-| `attach_image` | Attach generated image to an existing note field |
+| `generate_image` | Prefer another default image gen tool first; else generate or reuse a cached study image (Workers AI Flux) |
+| `import_image` | Fetch a host-tool image URL (Grok Imagine, etc.) into R2; returns an attachable hash |
+| `attach_image` | Attach generated or imported image to an existing note field |
 | `add_reverse` | Add a delayed reverse for existing `card_ids` (idempotent) |
 | `get_next_card` | Next due review, else a new card. `empty: true` if nothing is due |
 | `update_sequence` | Grade a specific `card_id`; `rating` is required |
@@ -53,7 +54,9 @@ Pace is one of `slowest` (0.65×), `slow` (0.8×, default), or `normal` (1×). C
 
 ## Images
 
-`generate_image` takes a short stable `subject` (the cache key) and a `prompt` (the drawing instruction). Workers AI `flux-2-klein-4b` runs only on a cache miss. `tibia` and `Tibia` are the same subject; two different anatomy-book prompts for `tibia` share the first image. Use a different subject if you need a second view (`tibia anterior`). Attach with `create_card` `media.kind: "image"` or `attach_image`.
+Prefer a host image tool (Grok Imagine, Cursor, …), then `import_image` with the HTTPS URL and a short `subject` label. That downloads PNG/JPEG/GIF/WebP (max 8MB), stores bytes in R2 keyed by content hash, and returns an attachable hash.
+
+`generate_image` is the fallback when no host tool is available. It takes a short stable `subject` (the cache key) and a `prompt` (the drawing instruction). Workers AI `flux-2-klein-4b` runs only on a cache miss. `tibia` and `Tibia` are the same subject; two different anatomy-book prompts for `tibia` share the first image. Use a different subject if you need a second view (`tibia anterior`). Attach with `create_card` `media.kind: "image"` or `attach_image`.
 
 Apply D1 migrations before deploying a version that uses audio:
 

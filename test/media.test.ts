@@ -5,11 +5,14 @@ import {
 	generateAudio,
 	generateImage,
 	imageHash,
+	importImage,
 	normalizeImageSubject,
 	normalizeTtsText,
 	publicOrigin,
+	requireHttpsImageUrl,
 	resolveVoice,
 	serveMedia,
+	sniffImageContent,
 } from "../src/media";
 
 describe("audio cache identity", () => {
@@ -247,5 +250,110 @@ describe("image cache identity", () => {
 		expect(response.status).toBe(206);
 		expect(response.headers.get("content-type")).toBe("image/png");
 		expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([2, 3]);
+	});
+});
+
+describe("import_image", () => {
+	const pngBytes = new Uint8Array([
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0x03,
+	]);
+
+	beforeAll(async () => {
+		await env.MEDIA_DB.prepare(`CREATE TABLE IF NOT EXISTS media_objects (
+			hash TEXT PRIMARY KEY,
+			kind TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			model TEXT NOT NULL,
+			voice TEXT NOT NULL,
+			lang TEXT NOT NULL,
+			source_text TEXT NOT NULL,
+			r2_key TEXT NOT NULL UNIQUE,
+			content_type TEXT NOT NULL,
+			byte_size INTEGER NOT NULL,
+			created_at INTEGER NOT NULL
+		)`).run();
+	});
+
+	it("requires https", () => {
+		expect(() => requireHttpsImageUrl("http://cdn.example.com/a.png")).toThrow(/https/i);
+	});
+
+	it("sniffs PNG and JPEG magic bytes", () => {
+		expect(sniffImageContent(pngBytes)).toEqual({
+			contentType: "image/png",
+			extension: "png",
+		});
+		expect(sniffImageContent(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toEqual({
+			contentType: "image/jpeg",
+			extension: "jpg",
+		});
+		expect(sniffImageContent(new Uint8Array([1, 2, 3, 4]))).toBeNull();
+	});
+
+	it("stores a fetched image once and serves it from R2", async () => {
+		const fetcher: typeof fetch = vi.fn(async (input) => {
+			expect(String(input)).toBe("https://assets.example.com/grok-imagine/tibia.png");
+			return new Response(pngBytes, {
+				status: 200,
+				headers: { "Content-Type": "image/png" },
+			});
+		});
+		const bindings = {
+			MEDIA_DB: env.MEDIA_DB,
+			MEDIA_BUCKET: env.MEDIA_BUCKET,
+		};
+
+		const created = await importImage(
+			bindings,
+			{ url: "https://assets.example.com/grok-imagine/tibia.png", subject: "Tibia" },
+			"https://example.com",
+			fetcher,
+		);
+		const cached = await importImage(
+			bindings,
+			{ url: "https://assets.example.com/grok-imagine/tibia.png", subject: "tibia" },
+			"https://example.com",
+			fetcher,
+		);
+
+		expect(created).toMatchObject({
+			cached: false,
+			provider: "import",
+			model: "url",
+			subject: "tibia",
+		});
+		expect(cached).toMatchObject({
+			cached: true,
+			hash: created.hash,
+			subject: "tibia",
+		});
+		expect(fetcher).toHaveBeenCalledTimes(2);
+
+		const response = await serveMedia(
+			new Request(created.url),
+			env.MEDIA_BUCKET,
+			env.MEDIA_DB,
+			created.hash,
+		);
+		expect(response.ok).toBe(true);
+		expect(response.headers.get("content-type")).toBe("image/png");
+		expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...pngBytes]);
+	});
+
+	it("rejects non-image bodies", async () => {
+		const fetcher: typeof fetch = vi.fn(async () => {
+			return new Response(new TextEncoder().encode("not an image"), { status: 200 });
+		});
+		await expect(
+			importImage(
+				{
+					MEDIA_DB: env.MEDIA_DB,
+					MEDIA_BUCKET: env.MEDIA_BUCKET,
+				},
+				{ url: "https://cdn.example.com/notes.txt", subject: "notes" },
+				"https://example.com",
+				fetcher,
+			),
+		).rejects.toThrow(/PNG, JPEG, GIF, or WebP/i);
 	});
 });

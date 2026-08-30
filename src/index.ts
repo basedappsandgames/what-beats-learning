@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp";
 import { z } from "zod";
 import { GoogleHandler } from "./google-handler";
-import { generateAudio, generateImage, mediaUrl, publicOrigin, requireAudioHashes, requireImageHashes } from "./media";
+import { generateAudio, generateImage, importImage, mediaUrl, publicOrigin, requireAudioHashes, requireImageHashes } from "./media";
 import {
 	UserLibrary,
 	type CreateCardInput,
@@ -16,7 +16,7 @@ import { jsonToolResult, type Props } from "./utils";
 const mediaHash = z
 	.string()
 	.regex(/^[0-9a-f]{64}$/u)
-	.describe("Hash returned by generate_audio or generate_image");
+	.describe("Hash returned by generate_audio, generate_image, or import_image");
 const mediaInput = z.object({
 	field: z.enum(["front", "back", "extra"]),
 	kind: z.enum(["audio", "image"]),
@@ -144,7 +144,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"create_card",
-		"Create one atomic cue→answer note. Attach media returned by generate_audio or generate_image to the stored front, back, or extra field. Pass reverse: true only when both retrieval directions matter.",
+		"Create one atomic cue→answer note. Attach media returned by generate_audio, generate_image, or import_image to the stored front, back, or extra field. Pass reverse: true only when both retrieval directions matter.",
 		cardInput,
 		(input) =>
 			observed("create_card", async () => {
@@ -206,7 +206,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"generate_image",
-		"Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever. Reuse the same subject for the same fact even if you would write a different prompt.",
+		"If you have another default image gen tool, please use that before you use this. Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever. Reuse the same subject for the same fact even if you would write a different prompt. After a host tool like Grok Imagine returns a URL, prefer import_image.",
 		{
 			subject: z
 				.string()
@@ -231,8 +231,33 @@ function createServer(env: Env, origin: string): McpServer {
 	);
 
 	server.tool(
+		"import_image",
+		"Fetch an image URL from a host image tool (Grok Imagine, Cursor GenerateImage CDN, etc.), store it in R2, and return an attachable hash. Prefer this after generating elsewhere. subject is a short label stored with the object; cache identity is the image bytes. HTTPS only; PNG/JPEG/GIF/WebP up to 8MB.",
+		{
+			url: z
+				.string()
+				.trim()
+				.min(1)
+				.max(2048)
+				.describe("HTTPS URL of the image to import, e.g. a Grok Imagine asset URL"),
+			subject: z
+				.string()
+				.min(1)
+				.max(80)
+				.describe(
+					"Short concept label, e.g. tibia. Stored with the object; not used as the cache key.",
+				),
+		},
+		(input) =>
+			observed("import_image", async () => {
+				requireProps();
+				return jsonToolResult(await importImage(env, input, origin));
+			}),
+	);
+
+	server.tool(
 		"attach_image",
-		"Attach an image previously returned by generate_image to one stored note field. The attachment applies to every card direction for that note.",
+		"Attach an image previously returned by generate_image or import_image to one stored note field. The attachment applies to every card direction for that note.",
 		{
 			card_id: z.number().int().positive(),
 			field: z.enum(["front", "back", "extra"]),
