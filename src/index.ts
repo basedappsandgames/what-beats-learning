@@ -206,7 +206,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"generate_image",
-		"Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever. Reuse the same subject for the same fact even if you would write a different prompt.",
+		"If you have another default image gen tool, please use that before you use this. Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever. Reuse the same subject for the same fact even if you would write a different prompt.",
 		{
 			subject: z
 				.string()

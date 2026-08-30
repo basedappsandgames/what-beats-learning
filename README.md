@@ -33,7 +33,7 @@ MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mc
 | `create_cards` | Atomically create up to 50 notes |
 | `generate_audio` | Generate or reuse a globally cached pronunciation clip |
 | `attach_audio` | Attach generated audio to an existing note field |
-| `generate_image` | Generate or reuse a cached study image (Workers AI Flux) |
+| `generate_image` | Prefer another default image gen tool first; else generate or reuse a cached study image (Workers AI Flux) |
 | `attach_image` | Attach generated image to an existing note field |
 | `add_reverse` | Add a delayed reverse for existing `card_ids` (idempotent) |
 | `get_next_card` | Next due review, else a new card. `empty: true` if nothing is due |
