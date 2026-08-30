@@ -54,7 +54,7 @@ Pace is one of `slowest` (0.65×), `slow` (0.8×, default), or `normal` (1×). C
 
 ## Images
 
-Prefer a host image tool (Grok Imagine, Cursor, …), then `import_image` with the HTTPS URL. That downloads PNG/JPEG/GIF/WebP (max 8MB), stores bytes in R2 keyed by content hash, and returns an attachable hash. Private/local URL targets are rejected.
+Prefer a host image tool (Grok Imagine, Cursor, …), then `import_image` with the HTTPS URL and a short `subject` label. That downloads PNG/JPEG/GIF/WebP (max 8MB), stores bytes in R2 keyed by content hash, and returns an attachable hash.
 
 `generate_image` is the fallback when no host tool is available. It takes a short stable `subject` (the cache key) and a `prompt` (the drawing instruction). Workers AI `flux-2-klein-4b` runs only on a cache miss. `tibia` and `Tibia` are the same subject; two different anatomy-book prompts for `tibia` share the first image. Use a different subject if you need a second view (`tibia anterior`). Attach with `create_card` `media.kind: "image"` or `attach_image`.
 

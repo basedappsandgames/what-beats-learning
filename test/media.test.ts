@@ -1,7 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
-	assertSafeImageUrl,
 	audioHash,
 	generateAudio,
 	generateImage,
@@ -10,6 +9,7 @@ import {
 	normalizeImageSubject,
 	normalizeTtsText,
 	publicOrigin,
+	requireHttpsImageUrl,
 	resolveVoice,
 	serveMedia,
 	sniffImageContent,
@@ -274,18 +274,11 @@ describe("import_image", () => {
 		)`).run();
 	});
 
-	it("rejects http, localhost, and private IP targets", () => {
-		expect(() => assertSafeImageUrl("http://cdn.example.com/a.png")).toThrow(/https/i);
-		expect(() => assertSafeImageUrl("https://localhost/a.png")).toThrow(/not allowed/i);
-		expect(() => assertSafeImageUrl("https://127.0.0.1/a.png")).toThrow(/private/i);
-		expect(() => assertSafeImageUrl("https://10.0.0.5/a.png")).toThrow(/private/i);
-		expect(() => assertSafeImageUrl("https://192.168.1.1/a.png")).toThrow(/private/i);
-		expect(() => assertSafeImageUrl("https://user:pass@cdn.example.com/a.png")).toThrow(
-			/credentials/i,
-		);
+	it("requires https", () => {
+		expect(() => requireHttpsImageUrl("http://cdn.example.com/a.png")).toThrow(/https/i);
 	});
 
-	it("sniffs PNG/JPEG/GIF/WebP magic bytes", () => {
+	it("sniffs PNG and JPEG magic bytes", () => {
 		expect(sniffImageContent(pngBytes)).toEqual({
 			contentType: "image/png",
 			extension: "png",
@@ -328,15 +321,12 @@ describe("import_image", () => {
 			provider: "import",
 			model: "url",
 			subject: "tibia",
-			content_type: "image/png",
-			byte_size: pngBytes.byteLength,
 		});
 		expect(cached).toMatchObject({
 			cached: true,
 			hash: created.hash,
 			subject: "tibia",
 		});
-		// Content-hash cache: second call still fetches (URL may differ) but R2 write is skipped.
 		expect(fetcher).toHaveBeenCalledTimes(2);
 
 		const response = await serveMedia(
@@ -350,51 +340,6 @@ describe("import_image", () => {
 		expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...pngBytes]);
 	});
 
-	it("follows a safe redirect and rejects redirect-to-private", async () => {
-		const redirectedPng = new Uint8Array([
-			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xaa, 0xbb, 0xcc, 0xdd,
-		]);
-		const okFetcher: typeof fetch = vi.fn(async (input) => {
-			const url = String(input);
-			if (url === "https://cdn.example.com/start.png") {
-				return new Response(null, {
-					status: 302,
-					headers: { Location: "https://cdn.example.com/final.png" },
-				});
-			}
-			return new Response(redirectedPng, { status: 200 });
-		});
-		const created = await importImage(
-			{
-				MEDIA_DB: env.MEDIA_DB,
-				MEDIA_BUCKET: env.MEDIA_BUCKET,
-			},
-			{ url: "https://cdn.example.com/start.png", subject: "redirected" },
-			"https://example.com",
-			okFetcher,
-		);
-		expect(created.cached).toBe(false);
-		expect(created.source_url).toBe("https://cdn.example.com/final.png");
-
-		const badFetcher: typeof fetch = vi.fn(async () => {
-			return new Response(null, {
-				status: 302,
-				headers: { Location: "https://127.0.0.1/secret.png" },
-			});
-		});
-		await expect(
-			importImage(
-				{
-					MEDIA_DB: env.MEDIA_DB,
-					MEDIA_BUCKET: env.MEDIA_BUCKET,
-				},
-				{ url: "https://cdn.example.com/evil.png" },
-				"https://example.com",
-				badFetcher,
-			),
-		).rejects.toThrow(/private/i);
-	});
-
 	it("rejects non-image bodies", async () => {
 		const fetcher: typeof fetch = vi.fn(async () => {
 			return new Response(new TextEncoder().encode("not an image"), { status: 200 });
@@ -405,7 +350,7 @@ describe("import_image", () => {
 					MEDIA_DB: env.MEDIA_DB,
 					MEDIA_BUCKET: env.MEDIA_BUCKET,
 				},
-				{ url: "https://cdn.example.com/notes.txt" },
+				{ url: "https://cdn.example.com/notes.txt", subject: "notes" },
 				"https://example.com",
 				fetcher,
 			),

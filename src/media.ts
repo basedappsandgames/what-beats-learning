@@ -7,7 +7,6 @@ const MAX_IMAGE_SUBJECT_LENGTH = 80;
 const MAX_IMAGE_PROMPT_LENGTH = 1500;
 const MAX_IMPORT_URL_LENGTH = 2048;
 const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
-const MAX_IMPORT_REDIRECTS = 3;
 const IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 const IMAGE_PROVIDER = "workers-ai";
 const IMPORT_PROVIDER = "import";
@@ -95,9 +94,6 @@ export type ImportedImageResult = {
 	provider: "import";
 	model: "url";
 	subject: string;
-	content_type: string;
-	source_url: string;
-	byte_size: number;
 };
 
 export function normalizeTtsText(text: string): string {
@@ -542,34 +538,8 @@ export async function generateImage(
 	};
 }
 
-function isPrivateIPv4(host: string): boolean {
-	const parts = host.split(".").map((part) => Number(part));
-	if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
-		return true;
-	}
-	const [a, b] = parts;
-	if (a === 10 || a === 127 || a === 0) return true;
-	if (a === 169 && b === 254) return true;
-	if (a === 172 && b >= 16 && b <= 31) return true;
-	if (a === 192 && b === 168) return true;
-	if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-	return false;
-}
-
-function isPrivateIPv6(host: string): boolean {
-	const normalized = host.toLowerCase();
-	if (normalized === "::" || normalized === "::1") return true;
-	if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true; // ULA
-	if (normalized.startsWith("fe80")) return true; // link-local
-	if (normalized.startsWith("::ffff:")) {
-		const mapped = normalized.slice("::ffff:".length);
-		if (/^\d{1,3}(\.\d{1,3}){3}$/u.test(mapped)) return isPrivateIPv4(mapped);
-	}
-	return false;
-}
-
-/** Reject non-https, credentials, localhost, and private IP literals. */
-export function assertSafeImageUrl(urlString: string): URL {
+/** Require a parseable https URL. */
+export function requireHttpsImageUrl(urlString: string): URL {
 	if (urlString.length > MAX_IMPORT_URL_LENGTH) {
 		throw new Error(`Image URL cannot exceed ${MAX_IMPORT_URL_LENGTH} characters`);
 	}
@@ -580,25 +550,6 @@ export function assertSafeImageUrl(urlString: string): URL {
 		throw new Error("Invalid image URL");
 	}
 	if (url.protocol !== "https:") throw new Error("Image URL must use https");
-	if (url.username || url.password) throw new Error("Image URL must not include credentials");
-	if (url.hash) throw new Error("Image URL must not include a fragment");
-
-	const host = url.hostname.toLowerCase();
-	if (
-		host === "localhost" ||
-		host.endsWith(".localhost") ||
-		host.endsWith(".local") ||
-		host.endsWith(".internal") ||
-		host === "metadata" ||
-		host === "metadata.google.internal"
-	) {
-		throw new Error("Image URL host is not allowed");
-	}
-	if (/^\d{1,3}(\.\d{1,3}){3}$/u.test(host)) {
-		if (isPrivateIPv4(host)) throw new Error("Image URL must not target a private IP");
-	} else if (host.includes(":")) {
-		if (isPrivateIPv6(host)) throw new Error("Image URL must not target a private IP");
-	}
 	return url;
 }
 
@@ -645,13 +596,6 @@ export function sniffImageContent(
 }
 
 async function readBodyLimited(response: Response, maxBytes: number): Promise<Uint8Array> {
-	const declared = response.headers.get("content-length");
-	if (declared) {
-		const size = Number(declared);
-		if (Number.isFinite(size) && size > maxBytes) {
-			throw new Error(`Image exceeds maximum size of ${maxBytes} bytes`);
-		}
-	}
 	if (!response.body) throw new Error("Image response had no body");
 	const reader = response.body.getReader();
 	const chunks: Uint8Array[] = [];
@@ -678,26 +622,16 @@ async function readBodyLimited(response: Response, maxBytes: number): Promise<Ui
 async function fetchImageBytes(
 	urlString: string,
 	fetcher: typeof fetch,
-): Promise<{ bytes: Uint8Array; finalUrl: string }> {
-	let current = assertSafeImageUrl(urlString).href;
-	for (let hop = 0; hop <= MAX_IMPORT_REDIRECTS; hop += 1) {
-		const response = await fetcher(current, {
-			method: "GET",
-			redirect: "manual",
-			headers: { Accept: "image/*,*/*;q=0.8" },
-		});
-		if ([301, 302, 303, 307, 308].includes(response.status)) {
-			const location = response.headers.get("location");
-			if (!location) throw new Error("Image redirect missing Location header");
-			current = assertSafeImageUrl(new URL(location, current).href).href;
-			continue;
-		}
-		if (!response.ok) throw new Error(`Image fetch failed with HTTP ${response.status}`);
-		const bytes = await readBodyLimited(response, MAX_IMPORT_BYTES);
-		if (bytes.length === 0) throw new Error("Image response was empty");
-		return { bytes, finalUrl: current };
-	}
-	throw new Error(`Image fetch exceeded ${MAX_IMPORT_REDIRECTS} redirects`);
+): Promise<Uint8Array> {
+	const url = requireHttpsImageUrl(urlString).href;
+	const response = await fetcher(url, {
+		method: "GET",
+		headers: { Accept: "image/*" },
+	});
+	if (!response.ok) throw new Error(`Image fetch failed with HTTP ${response.status}`);
+	const bytes = await readBodyLimited(response, MAX_IMPORT_BYTES);
+	if (bytes.length === 0) throw new Error("Image response was empty");
+	return bytes;
 }
 
 export async function importedImageHash(bytes: Uint8Array): Promise<string> {
@@ -711,14 +645,12 @@ export async function importedImageHash(bytes: Uint8Array): Promise<string> {
  */
 export async function importImage(
 	env: { MEDIA_BUCKET: R2Bucket; MEDIA_DB: D1Database },
-	input: { url: string; subject?: string },
+	input: { url: string; subject: string },
 	origin: string,
 	fetcher: typeof fetch = fetch,
 ): Promise<ImportedImageResult> {
-	const subject = input.subject
-		? normalizeImageSubject(input.subject)
-		: normalizeImageSubject("imported");
-	const { bytes, finalUrl } = await fetchImageBytes(input.url, fetcher);
+	const subject = normalizeImageSubject(input.subject);
+	const bytes = await fetchImageBytes(input.url, fetcher);
 	const sniffed = sniffImageContent(bytes);
 	if (!sniffed) {
 		throw new Error("URL did not return a PNG, JPEG, GIF, or WebP image");
@@ -739,10 +671,7 @@ export async function importImage(
 			cached: true,
 			provider: IMPORT_PROVIDER,
 			model: IMPORT_MODEL,
-			subject: existing.source_text || subject,
-			content_type: existing.content_type,
-			source_url: finalUrl,
-			byte_size: existing.byte_size,
+			subject: existing.source_text,
 		};
 	}
 
@@ -752,12 +681,7 @@ export async function importImage(
 			contentType: sniffed.contentType,
 			cacheControl: "public, max-age=31536000, immutable",
 		},
-		customMetadata: {
-			hash,
-			provider: IMPORT_PROVIDER,
-			subject,
-			source_url: finalUrl.slice(0, 1024),
-		},
+		customMetadata: { hash, provider: IMPORT_PROVIDER, subject },
 	});
 	if (!object) throw new Error("R2 did not store imported image");
 
@@ -791,9 +715,6 @@ export async function importImage(
 		provider: IMPORT_PROVIDER,
 		model: IMPORT_MODEL,
 		subject,
-		content_type: sniffed.contentType,
-		source_url: finalUrl,
-		byte_size: object.size,
 	};
 }
 

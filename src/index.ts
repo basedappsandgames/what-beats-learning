@@ -232,7 +232,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"import_image",
-		"Fetch an image URL from a host image tool (Grok Imagine, Cursor GenerateImage CDN, etc.), store it in R2, and return an attachable hash. Prefer this after generating elsewhere. Optional subject is a short label stored with the object; cache identity is the image bytes. HTTPS only; PNG/JPEG/GIF/WebP up to 8MB.",
+		"Fetch an image URL from a host image tool (Grok Imagine, Cursor GenerateImage CDN, etc.), store it in R2, and return an attachable hash. Prefer this after generating elsewhere. subject is a short label stored with the object; cache identity is the image bytes. HTTPS only; PNG/JPEG/GIF/WebP up to 8MB.",
 		{
 			url: z
 				.string()
@@ -244,9 +244,8 @@ function createServer(env: Env, origin: string): McpServer {
 				.string()
 				.min(1)
 				.max(80)
-				.optional()
 				.describe(
-					"Optional short concept label, e.g. tibia. Defaults to imported. Not used as the cache key.",
+					"Short concept label, e.g. tibia. Stored with the object; not used as the cache key.",
 				),
 		},
 		(input) =>
