@@ -463,13 +463,14 @@ async function synthesizeFlux(
 
 export async function generateImage(
 	env: { MEDIA_BUCKET: R2Bucket; MEDIA_DB: D1Database; AI: Ai },
-	input: { subject: string; prompt: string },
+	input: { subject: string; prompt: string; replace?: boolean },
 	origin: string,
 	synthesize: (prompt: string) => Promise<Uint8Array> = (prompt) =>
 		synthesizeFlux(prompt, env.AI),
 ): Promise<ImageResult> {
 	const subject = normalizeImageSubject(input.subject);
 	const prompt = normalizeImagePrompt(input.prompt);
+	const replace = input.replace === true;
 	const hash = await imageHash(subject);
 	const existing = await env.MEDIA_DB.prepare(
 		`SELECT hash, kind, provider, model, voice, lang, source_text,
@@ -478,7 +479,7 @@ export async function generateImage(
 	)
 		.bind(hash)
 		.first<MediaObjectRow>();
-	if (existing) {
+	if (existing && !replace) {
 		if (existing.kind !== IMAGE_KIND) throw new Error(`Unexpected media kind ${existing.kind}`);
 		return {
 			hash: existing.hash,
@@ -490,6 +491,9 @@ export async function generateImage(
 			width: IMAGE_WIDTH,
 			height: IMAGE_HEIGHT,
 		};
+	}
+	if (existing && existing.kind !== IMAGE_KIND) {
+		throw new Error(`Unexpected media kind ${existing.kind}`);
 	}
 
 	const bytes = await synthesize(prompt);
@@ -504,27 +508,37 @@ export async function generateImage(
 	if (!object) throw new Error("R2 did not store generated image");
 
 	const createdAt = Date.now();
-	await env.MEDIA_DB.prepare(
-		`INSERT INTO media_objects
-			(hash, kind, provider, model, voice, lang, source_text, r2_key,
-			 content_type, byte_size, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(hash) DO NOTHING`,
-	)
-		.bind(
-			hash,
-			IMAGE_KIND,
-			IMAGE_PROVIDER,
-			IMAGE_MODEL,
-			"",
-			"",
-			subject,
-			r2Key,
-			IMAGE_CONTENT_TYPE,
-			object.size,
-			createdAt,
+	if (existing) {
+		await env.MEDIA_DB.prepare(
+			`UPDATE media_objects
+			 SET model = ?, source_text = ?, content_type = ?, byte_size = ?, created_at = ?
+			 WHERE hash = ?`,
 		)
-		.run();
+			.bind(IMAGE_MODEL, subject, IMAGE_CONTENT_TYPE, object.size, createdAt, hash)
+			.run();
+	} else {
+		await env.MEDIA_DB.prepare(
+			`INSERT INTO media_objects
+				(hash, kind, provider, model, voice, lang, source_text, r2_key,
+				 content_type, byte_size, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(hash) DO NOTHING`,
+		)
+			.bind(
+				hash,
+				IMAGE_KIND,
+				IMAGE_PROVIDER,
+				IMAGE_MODEL,
+				"",
+				"",
+				subject,
+				r2Key,
+				IMAGE_CONTENT_TYPE,
+				object.size,
+				createdAt,
+			)
+			.run();
+	}
 
 	return {
 		hash,

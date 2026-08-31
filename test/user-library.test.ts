@@ -39,6 +39,14 @@ describe("UserLibrary happy path", () => {
 		expect(
 			await library.attachImage(geographyCardId, "front", geographyImage),
 		).toMatchObject({ attached: true, note_id: batch.created[1].note_id, kind: "image" });
+		const replacementImage = "d".repeat(64);
+		expect(
+			await library.attachImage(geographyCardId, "front", replacementImage, true),
+		).toMatchObject({
+			attached: true,
+			replaced: true,
+			hash: replacementImage,
+		});
 
 		const first = await library.getNextCard();
 		expect(first.empty).toBe(false);
@@ -56,7 +64,7 @@ describe("UserLibrary happy path", () => {
 		expect(second.direction).toBe("forward");
 		expect(second.front_media).toEqual([
 			{ field: "front", kind: "audio", hash: geographyAudio },
-			{ field: "front", kind: "image", hash: geographyImage },
+			{ field: "front", kind: "image", hash: replacementImage },
 		]);
 		await library.updateSequence({ cardId: second.card_id, rating: "good" });
 

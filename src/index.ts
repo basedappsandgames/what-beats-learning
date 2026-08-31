@@ -206,7 +206,7 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"generate_image",
-		"If you have another default image gen tool, please use that before you use this. Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever. Reuse the same subject for the same fact even if you would write a different prompt. After a host tool like Grok Imagine returns a URL, prefer import_image.",
+		"If you have another default image gen tool, please use that before you use this. Get or create a cached study image. subject is a short concept label used as the cache key (tibia, Hartford) — never the drawing prompt. prompt is the full illustration instruction and is used only on a cache miss; the first prompt for a subject is kept forever unless replace is true. Reuse the same subject for the same fact even if you would write a different prompt. After a host tool like Grok Imagine returns a URL, prefer import_image. Pass replace: true only when the cached image for this subject is wrong and no host image URL is available.",
 		{
 			subject: z
 				.string()
@@ -220,7 +220,13 @@ function createServer(env: Env, origin: string): McpServer {
 				.min(1)
 				.max(1500)
 				.describe(
-					"Full drawing instruction, e.g. anatomy-book illustration of a tibia highlighted among a cross-section of a leg. Used only if this subject is not already cached.",
+					"Full drawing instruction, e.g. anatomy-book illustration of a tibia highlighted among a cross-section of a leg. Used only if this subject is not already cached, or when replace is true.",
+				),
+			replace: z
+				.boolean()
+				.optional()
+				.describe(
+					"Overwrite the cached image for this subject. Default false. Use only to fix a bad cache entry.",
 				),
 		},
 		(input) =>
@@ -257,16 +263,22 @@ function createServer(env: Env, origin: string): McpServer {
 
 	server.tool(
 		"attach_image",
-		"Attach an image previously returned by generate_image or import_image to one stored note field. The attachment applies to every card direction for that note.",
+		"Attach an image previously returned by generate_image or import_image to one stored note field. The attachment applies to every card direction for that note. Pass replace: true to swap an existing image on that field.",
 		{
 			card_id: z.number().int().positive(),
 			field: z.enum(["front", "back", "extra"]),
 			hash: mediaHash,
+			replace: z
+				.boolean()
+				.optional()
+				.describe("Replace an existing image on this field. Default false."),
 		},
-		({ card_id, field, hash }) =>
+		({ card_id, field, hash, replace }) =>
 			observed("attach_image", async () => {
 				await requireImageHashes(env.MEDIA_DB, [hash]);
-				return jsonToolResult(await libraryFor(env).attachImage(card_id, field, hash));
+				return jsonToolResult(
+					await libraryFor(env).attachImage(card_id, field, hash, replace === true),
+				);
 			}),
 	);
 
