@@ -56,7 +56,7 @@ Pace is one of `slowest` (0.65×), `slow` (0.8×, default), or `normal` (1×). C
 
 Prefer a host image tool (Grok Imagine, Cursor, …), then `import_image` with the HTTPS URL and a short `subject` label. That downloads PNG/JPEG/GIF/WebP (max 8MB), stores bytes in R2 keyed by content hash, and returns an attachable hash.
 
-`generate_image` is the fallback when no host tool is available. It takes a short stable `subject` (the cache key) and a `prompt` (the drawing instruction). Workers AI `flux-2-klein-4b` runs only on a cache miss. `tibia` and `Tibia` are the same subject; two different anatomy-book prompts for `tibia` share the first image. Use a different subject if you need a second view (`tibia anterior`). Attach with `create_card` `media.kind: "image"` or `attach_image`.
+`generate_image` is the fallback when no host tool is available. It takes a short stable `subject` (the cache key) and a `prompt` (the drawing instruction). Workers AI `flux-2-klein-4b` runs only on a cache miss, or when `replace: true` overwrites a bad subject cache. `tibia` and `Tibia` are the same subject; two different anatomy-book prompts for `tibia` share the first image unless replaced. Use a different subject if you need a second view (`tibia anterior`). Attach with `create_card` `media.kind: "image"` or `attach_image` (`replace: true` swaps an existing field image).
 
 Apply D1 migrations before deploying a version that uses audio:
 

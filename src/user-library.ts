@@ -598,11 +598,11 @@ export class UserLibrary extends DurableObject<Env> {
 	}
 
 	async attachAudio(cardId: number, field: NoteField, hash: string) {
-		return this.attachMedia(cardId, field, "audio", hash);
+		return this.attachMedia(cardId, field, "audio", hash, false);
 	}
 
-	async attachImage(cardId: number, field: NoteField, hash: string) {
-		return this.attachMedia(cardId, field, "image", hash);
+	async attachImage(cardId: number, field: NoteField, hash: string, replace = false) {
+		return this.attachMedia(cardId, field, "image", hash, replace);
 	}
 
 	private attachMedia(
@@ -610,6 +610,7 @@ export class UserLibrary extends DurableObject<Env> {
 		field: NoteField,
 		kind: "audio" | "image",
 		hash: string,
+		replace: boolean,
 	) {
 		const card = this.sql
 			.exec<{ note_id: number }>("SELECT note_id FROM study_cards WHERE id = ?", cardId)
@@ -627,10 +628,37 @@ export class UserLibrary extends DurableObject<Env> {
 			)
 			.toArray()[0];
 		if (existing) {
-			if (existing.hash !== hash) {
+			if (existing.hash === hash) {
+				return {
+					attached: false,
+					already_attached: true,
+					replaced: false,
+					note_id: noteId,
+					field,
+					kind,
+					hash,
+				};
+			}
+			if (!replace) {
 				throw new Error(`Note ${noteId} already has ${kind} attached to ${field}`);
 			}
-			return { attached: false, already_attached: true, note_id: noteId, field, kind, hash };
+			this.sql.exec(
+				`UPDATE study_media SET hash = ?
+				 WHERE note_id = ? AND field = ? AND kind = ?`,
+				hash,
+				noteId,
+				field,
+				kind,
+			);
+			return {
+				attached: true,
+				already_attached: false,
+				replaced: true,
+				note_id: noteId,
+				field,
+				kind,
+				hash,
+			};
 		}
 
 		this.sql.exec(
@@ -641,7 +669,15 @@ export class UserLibrary extends DurableObject<Env> {
 			kind,
 			hash,
 		);
-		return { attached: true, already_attached: false, note_id: noteId, field, kind, hash };
+		return {
+			attached: true,
+			already_attached: false,
+			replaced: false,
+			note_id: noteId,
+			field,
+			kind,
+			hash,
+		};
 	}
 
 	async getNextCard(): Promise<NextCardResult> {

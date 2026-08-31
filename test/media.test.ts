@@ -241,6 +241,21 @@ describe("image cache identity", () => {
 			"anatomy book image illustration of a tibia highlighted amongst a cross section of a leg",
 		);
 
+		const replacedBytes = new Uint8Array([9, 8, 7, 6]);
+		const replaceSynth = vi.fn(async () => replacedBytes);
+		const replaced = await generateImage(
+			bindings,
+			{
+				subject: "tibia",
+				prompt: "wide flat Cantonese cheung fun sheets on a plate, not rolled noodles",
+				replace: true,
+			},
+			"https://example.com",
+			replaceSynth,
+		);
+		expect(replaced).toMatchObject({ cached: false, hash: created.hash, subject: "tibia" });
+		expect(replaceSynth).toHaveBeenCalledTimes(1);
+
 		const response = await serveMedia(
 			new Request(created.url, { headers: { Range: "bytes=1-2" } }),
 			env.MEDIA_BUCKET,
@@ -249,7 +264,7 @@ describe("image cache identity", () => {
 		);
 		expect(response.status).toBe(206);
 		expect(response.headers.get("content-type")).toBe("image/png");
-		expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([2, 3]);
+		expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([8, 7]);
 	});
 });
 
