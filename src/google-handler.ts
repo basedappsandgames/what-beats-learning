@@ -1,4 +1,9 @@
-import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import {
+	AuthorizationError,
+	CimdFetchError,
+	type AuthRequest,
+	type OAuthHelpers,
+} from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { privacyPolicyPage, termsOfServicePage } from "./legal-pages";
 import { serveMedia } from "./media";
@@ -16,6 +21,40 @@ import {
 } from "./workers-oauth-utils";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
+
+function authorizationErrorResponse(error: AuthorizationError): Response {
+	if (!error.redirectUri) {
+		return new Response(error.description, { status: 400 });
+	}
+	const redirect = new URL(error.redirectUri);
+	redirect.searchParams.set("error", error.code);
+	redirect.searchParams.set("error_description", error.description);
+	if (error.state) redirect.searchParams.set("state", error.state);
+	if (error.issuer) redirect.searchParams.set("iss", error.issuer);
+	return Response.redirect(redirect.href, 302);
+}
+
+async function parseAuthorizationRequest(
+	provider: OAuthHelpers,
+	request: Request,
+): Promise<AuthRequest | Response> {
+	try {
+		return await provider.parseAuthRequest(request);
+	} catch (error) {
+		if (error instanceof AuthorizationError) {
+			return authorizationErrorResponse(error);
+		}
+		if (error instanceof CimdFetchError) {
+			console.error({
+				event: "cimd_fetch_failed",
+				metadataUrl: error.metadataUrl,
+				detail: error.detail,
+			});
+			return new Response("Unable to resolve OAuth client metadata", { status: 400 });
+		}
+		throw error;
+	}
+}
 
 app.get("/", (c) => {
 	const origin = new URL(c.req.url).origin;
@@ -96,7 +135,10 @@ app.on(["GET", "HEAD"], "/media/:hash", (c) =>
 );
 
 app.get("/authorize", async (c) => {
-	const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+	const oauthReqInfo = await parseAuthorizationRequest(c.env.OAUTH_PROVIDER, c.req.raw);
+	if (oauthReqInfo instanceof Response) {
+		return oauthReqInfo;
+	}
 	const { clientId } = oauthReqInfo;
 	if (!clientId) {
 		return c.text("Invalid request", 400);

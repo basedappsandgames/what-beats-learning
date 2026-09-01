@@ -421,6 +421,8 @@ export default new OAuthProvider({
 	apiHandler: mcpHandler,
 	authorizeEndpoint: "/authorize",
 	clientRegistrationEndpoint: "/register",
+	// 0.10+ negotiates ChatGPT CIMD (prefers private_key_jwt, also offers none)
+	// down to public-client none so /token does not demand a client_secret.
 	clientIdMetadataDocumentEnabled: true,
 	defaultHandler: authHandler,
 	tokenEndpoint: "/token",
