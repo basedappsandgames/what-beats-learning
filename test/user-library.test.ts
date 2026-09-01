@@ -74,5 +74,19 @@ describe("UserLibrary happy path", () => {
 		if (empty.next_due === null) throw new Error("Expected a future due date");
 		expect(new Date(empty.next_due).getTime()).toBeGreaterThan(Date.now());
 		expect(empty.hint).toContain(empty.next_due);
+
+		const listed = await library.listCards({ deck: "Geography" });
+		expect(listed.count).toBe(2);
+		expect(listed.cards.map((card) => card.direction).sort()).toEqual([
+			"forward",
+			"reverse",
+		]);
+		expect(listed.cards.every((card) => card.deck === "Geography")).toBe(true);
+		const forward = listed.cards.find((card) => card.direction === "forward");
+		expect(forward?.front).toBe("What is the capital of France?");
+		expect(forward?.media).toEqual([
+			{ field: "front", kind: "audio", hash: geographyAudio },
+			{ field: "front", kind: "image", hash: replacementImage },
+		]);
 	});
 });

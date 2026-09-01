@@ -797,6 +797,114 @@ export class UserLibrary extends DurableObject<Env> {
 			});
 	}
 
+	async listCards(input: { limit?: number; offset?: number; deck?: string } = {}) {
+		const limit = input.limit ?? 50;
+		const offset = input.offset ?? 0;
+		if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+			throw new Error("limit must be an integer from 1 to 200");
+		}
+		if (!Number.isInteger(offset) || offset < 0) {
+			throw new Error("offset must be a non-negative integer");
+		}
+		const deck = input.deck?.trim();
+
+		const rows = deck
+			? this.sql
+					.exec<{
+						card_id: number;
+						note_id: number;
+						deck: string;
+						direction: string;
+						front: string;
+						back: string;
+						due: number;
+						state: number;
+					}>(
+						`SELECT c.id AS card_id, c.note_id, d.name AS deck, c.direction,
+								n.front, n.back, s.due, s.state
+						 FROM study_cards c
+						 JOIN study_notes n ON n.id = c.note_id
+						 JOIN study_decks d ON d.id = c.deck_id
+						 JOIN study_schedules s ON s.card_id = c.id
+						 WHERE d.name = ?
+						 ORDER BY d.name, c.id
+						 LIMIT ? OFFSET ?`,
+						deck,
+						limit,
+						offset,
+					)
+					.toArray()
+			: this.sql
+					.exec<{
+						card_id: number;
+						note_id: number;
+						deck: string;
+						direction: string;
+						front: string;
+						back: string;
+						due: number;
+						state: number;
+					}>(
+						`SELECT c.id AS card_id, c.note_id, d.name AS deck, c.direction,
+								n.front, n.back, s.due, s.state
+						 FROM study_cards c
+						 JOIN study_notes n ON n.id = c.note_id
+						 JOIN study_decks d ON d.id = c.deck_id
+						 JOIN study_schedules s ON s.card_id = c.id
+						 ORDER BY d.name, c.id
+						 LIMIT ? OFFSET ?`,
+						limit,
+						offset,
+					)
+					.toArray();
+
+		const noteIds = [...new Set(rows.map((row) => Number(row.note_id)))];
+		const mediaByNote = new Map<
+			number,
+			Array<{ field: string; kind: string; hash: string }>
+		>();
+		if (noteIds.length) {
+			const placeholders = noteIds.map(() => "?").join(", ");
+			const mediaRows = this.sql
+				.exec<{ note_id: number; field: string; kind: string; hash: string }>(
+					`SELECT note_id, field, kind, hash FROM study_media
+					 WHERE note_id IN (${placeholders})
+					 ORDER BY note_id, field, kind`,
+					...noteIds,
+				)
+				.toArray();
+			for (const item of mediaRows) {
+				const noteId = Number(item.note_id);
+				const list = mediaByNote.get(noteId) ?? [];
+				list.push({ field: item.field, kind: item.kind, hash: item.hash });
+				mediaByNote.set(noteId, list);
+			}
+		}
+
+		const cards = rows.map((row) => {
+			const direction = directionName(row.direction);
+			const noteId = Number(row.note_id);
+			return {
+				card_id: Number(row.card_id),
+				note_id: noteId,
+				deck: row.deck,
+				front: direction === "forward" ? row.front : row.back,
+				direction,
+				due: new Date(Number(row.due)).toISOString(),
+				state: stateName(Number(row.state)),
+				media: mediaByNote.get(noteId) ?? [],
+			};
+		});
+
+		return {
+			count: cards.length,
+			offset,
+			limit,
+			...(deck ? { deck } : {}),
+			cards,
+		};
+	}
+
 	async updateSequence(input: UpdateSequenceInput) {
 		const beforeRow = this.sql
 			.exec<ScheduleRow>(

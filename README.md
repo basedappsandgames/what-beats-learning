@@ -41,7 +41,8 @@ MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mc
 | `update_sequence` | Grade a specific `card_id`; `rating` is required |
 | `get_learning_style_prompt` | Pedagogy constitution for this user |
 | `update_learning_style_prompt` | Merge feedback or replace/reset (short ack by default) |
-| `list_decks` / `list_due_cards` | Inventory of now-servable cards |
+| `list_decks` / `list_due_cards` | Deck counts and now-servable queue |
+| `list_cards` | Full library inventory with card ids and media hashes |
 | `whoami` | Signed-in identity + card counts |
 
 Isolation: the library Durable Object is keyed by the Google subject in the verified OAuth token. Tool arguments never select another user's database.
