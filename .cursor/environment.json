@@ -1,0 +1,17 @@
+{
+	"name": "What Beats Learning",
+	"install": "npm ci\nif [ ! -f .dev.vars ]; then sed \"s|^COOKIE_ENCRYPTION_KEY=.*|COOKIE_ENCRYPTION_KEY=$(openssl rand -hex 32)|\" .dev.vars.example > .dev.vars; fi",
+	"terminals": [
+		{
+			"name": "wrangler dev",
+			"command": "if [ -n \"$CLOUDFLARE_API_TOKEN\" ]; then npx wrangler dev; else npx wrangler dev --local; fi",
+			"description": "Cloudflare Workers dev server for the What Beats Learning MCP on http://localhost:8788. If CLOUDFLARE_API_TOKEN is set (add it in the Secrets panel), it runs `wrangler dev` with remote bindings so the Workers AI generate_image tool works. Otherwise it falls back to `wrangler dev --local`, where every route and MCP tool works except generate_image (Workers AI is remote-only)."
+		}
+	],
+	"ports": [
+		{
+			"name": "wrangler dev",
+			"port": 8788
+		}
+	]
+}
