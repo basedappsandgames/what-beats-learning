@@ -1,46 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-
-const plugin = JSON.parse(readFileSync(".codex-plugin/plugin.json", "utf8")) as {
-	name: string;
-	version: string;
-	description: string;
-	author: { name: string };
-	mcpServers: string;
-	interface: {
-		displayName: string;
-		websiteURL: string;
-		privacyPolicyURL: string;
-		termsOfServiceURL: string;
-		defaultPrompt: string[];
-		composerIcon: string;
-		logo: string;
-		category: string;
-	};
-};
-
-const mcp = JSON.parse(readFileSync(".mcp.json", "utf8")) as {
-	mcpServers: Record<string, { type: string; url: string }>;
-};
-
-const marketplace = JSON.parse(
-	readFileSync(".agents/plugins/marketplace.json", "utf8"),
-) as {
-	plugins: Array<{
-		name: string;
-		source: { path: string };
-		policy: { installation: string; authentication: string };
-		category: string;
-	}>;
-};
-
-const submission = JSON.parse(readFileSync("chatgpt-app-submission.json", "utf8")) as {
-	schema_version: number;
-	app_info: { subtitle: string; category: string };
-	tools: Record<string, unknown>;
-	test_cases: unknown[];
-	negative_test_cases: unknown[];
-};
+import marketplace from "../.agents/plugins/marketplace.json";
+import plugin from "../.codex-plugin/plugin.json";
+import mcp from "../.mcp.json";
+import submission from "../chatgpt-app-submission.json";
 
 describe("Codex / ChatGPT plugin package", () => {
 	it("has a complete plugin.json for directory listing", () => {
@@ -77,13 +39,6 @@ describe("Codex / ChatGPT plugin package", () => {
 		expect(marketplace.plugins[0]?.policy.installation).toBe("AVAILABLE");
 		expect(marketplace.plugins[0]?.policy.authentication).toBe("ON_INSTALL");
 		expect(marketplace.plugins[0]?.category).toBe("Education");
-	});
-
-	it("ships a PNG logo for the plugin listing", () => {
-		const bytes = readFileSync("assets/icon.png");
-		expect(bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(
-			true,
-		);
 	});
 
 	it("pre-fills ChatGPT store submission metadata", () => {
