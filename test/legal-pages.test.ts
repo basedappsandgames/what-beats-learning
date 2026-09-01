@@ -31,5 +31,23 @@ describe("home page", () => {
 		expect(html).toContain("Codex");
 		expect(html).toContain("codex mcp add what-beats-learning --url https://whatbeatslearning.com/mcp");
 		expect(html).toContain("codex mcp login what-beats-learning");
+		expect(html).toContain('rel="icon" href="https://whatbeatslearning.com/icon.png"');
 	});
+});
+
+describe("brand icon", () => {
+	it.each(["/icon.png", "/favicon.ico", "/favicon.png", "/apple-touch-icon.png"])(
+		"serves %s as a public PNG",
+		async (path) => {
+			const response = await GoogleHandler.request(`https://whatbeatslearning.com${path}`);
+			const bytes = new Uint8Array(await response.arrayBuffer());
+
+			expect(response.status).toBe(200);
+			expect(response.headers.get("content-type")).toBe("image/png");
+			expect(bytes[0]).toBe(0x89);
+			expect(bytes[1]).toBe(0x50);
+			expect(bytes[2]).toBe(0x4e);
+			expect(bytes[3]).toBe(0x47);
+		},
+	);
 });

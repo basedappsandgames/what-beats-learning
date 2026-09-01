@@ -5,6 +5,7 @@ import {
 	type OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
+import iconPng from "./icon.png";
 import { privacyPolicyPage, termsOfServicePage } from "./legal-pages";
 import { serveMedia } from "./media";
 import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl, type Props } from "./utils";
@@ -64,6 +65,8 @@ app.get("/", (c) => {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>What Beats Learning</title>
+  <link rel="icon" href="${origin}/icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="${origin}/icon.png" />
   <style>
     :root { color-scheme: light; }
     body { font-family: Georgia, "Times New Roman", serif; margin: 0; background: #f4efe6; color: #1f1a14; }
@@ -130,6 +133,24 @@ codex mcp login what-beats-learning</pre>
 
 app.get("/docs/privacy", (c) => c.html(privacyPolicyPage()));
 app.get("/docs/terms", (c) => c.html(termsOfServicePage()));
+
+const ICON_HEADERS = {
+	"Content-Type": "image/png",
+	"Cache-Control": "public, max-age=86400",
+	"Content-Length": String(iconPng.byteLength),
+};
+
+app.on(
+	["GET", "HEAD"],
+	["/icon.png", "/favicon.png", "/favicon.ico", "/apple-touch-icon.png"],
+	(c) => {
+		if (c.req.method === "HEAD") {
+			return new Response(null, { status: 200, headers: ICON_HEADERS });
+		}
+		return new Response(iconPng, { headers: ICON_HEADERS });
+	},
+);
+
 app.on(["GET", "HEAD"], "/media/:hash", (c) =>
 	serveMedia(c.req.raw, c.env.MEDIA_BUCKET, c.env.MEDIA_DB, c.req.param("hash")),
 );

@@ -113,7 +113,16 @@ function createServer(env: Env, origin: string): McpServer {
 	const server = new McpServer(
 		{
 			name: "what-beats-learning",
+			title: "What Beats Learning",
 			version: "0.5.0",
+			websiteUrl: origin,
+			icons: [
+				{
+					src: `${origin}/icon.png`,
+					mimeType: "image/png",
+					sizes: ["256x256"],
+				},
+			],
 		},
 		{ instructions: MCP_SESSION_INSTRUCTIONS },
 	);
