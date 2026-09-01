@@ -28,8 +28,9 @@ describe("home page", () => {
 		expect(html).toContain("Cursor");
 		expect(html).toContain("Customize → MCPs");
 		expect(html).toContain('"what-beats-learning"');
-		expect(html).toContain("Codex");
+		expect(html).toContain("ChatGPT and Codex");
 		expect(html).toContain("codex mcp add what-beats-learning --url https://whatbeatslearning.com/mcp");
 		expect(html).toContain("codex mcp login what-beats-learning");
+		expect(html).toContain("Plugins directory");
 	});
 });

@@ -1,0 +1,39 @@
+{
+	"name": "what-beats-learning",
+	"version": "0.5.0",
+	"description": "Spaced-repetition tutoring over remote MCP. Sign in with Google, then create and review FSRS flashcards.",
+	"author": {
+		"name": "basedappsandgames",
+		"url": "https://github.com/basedappsandgames"
+	},
+	"homepage": "https://whatbeatslearning.com",
+	"repository": "https://github.com/basedappsandgames/what-beats-learning",
+	"keywords": [
+		"spaced-repetition",
+		"flashcards",
+		"fsrs",
+		"tutoring",
+		"education",
+		"mcp"
+	],
+	"mcpServers": "./.mcp.json",
+	"interface": {
+		"displayName": "What Beats Learning",
+		"shortDescription": "Spaced-repetition tutoring with FSRS flashcards",
+		"longDescription": "What Beats Learning is a remote MCP tutor that keeps an isolated flashcard library for each Google account. After you sign in, your agent can create atomic cue-answer notes, attach pronunciation audio or study images, and run FSRS reviews. Pedagogy lives in a per-user learning-style prompt so the same tools can quiz, explain, or drill without mixing other users' data.",
+		"developerName": "basedappsandgames",
+		"category": "Education",
+		"capabilities": ["Interactive", "Read", "Write"],
+		"websiteURL": "https://whatbeatslearning.com",
+		"privacyPolicyURL": "https://whatbeatslearning.com/docs/privacy",
+		"termsOfServiceURL": "https://whatbeatslearning.com/docs/terms",
+		"defaultPrompt": [
+			"Quiz me on my due What Beats Learning cards.",
+			"Make a small first deck for a topic I want to learn.",
+			"Show my decks and what is due to review now."
+		],
+		"brandColor": "#8a2f12",
+		"composerIcon": "./assets/icon.png",
+		"logo": "./assets/icon.png"
+	}
+}

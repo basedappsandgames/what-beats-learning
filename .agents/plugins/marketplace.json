@@ -1,0 +1,20 @@
+{
+	"name": "what-beats-learning",
+	"interface": {
+		"displayName": "What Beats Learning"
+	},
+	"plugins": [
+		{
+			"name": "what-beats-learning",
+			"source": {
+				"source": "local",
+				"path": "./"
+			},
+			"policy": {
+				"installation": "AVAILABLE",
+				"authentication": "ON_INSTALL"
+			},
+			"category": "Education"
+		}
+	]
+}

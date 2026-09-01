@@ -1,0 +1,272 @@
+{
+	"$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+	"schema_version": 1,
+	"app_info": {
+		"display_name": "What Beats Learning",
+		"subtitle": "Spaced-repetition flashcards",
+		"description": "What Beats Learning is a remote MCP tutor for spaced-repetition flashcards. Sign in with Google to get an isolated FSRS library, then ask ChatGPT to create atomic cue-answer notes, attach pronunciation audio or study images, and run reviews. It does not access other users' libraries, send email, post publicly, or move money.",
+		"category": "EDUCATION"
+	},
+	"tools": {
+		"whoami": {
+			"annotations": {
+				"readOnlyHint": true,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Returns the signed-in Google identity and this user's library counts without creating or changing cards.",
+				"open_world_justification": "Reads only this user's private library. It does not post, message, or change any public internet state.",
+				"destructive_justification": "Does not delete, overwrite, or otherwise change stored data."
+			}
+		},
+		"create_card": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Creates a new note and FSRS card(s) in the signed-in user's library.",
+				"open_world_justification": "Writes only to this user's private library. It does not publish content or change public internet state.",
+				"destructive_justification": "Adds a new note. It does not delete or overwrite existing cards."
+			}
+		},
+		"create_cards": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Atomically creates up to 50 notes in the signed-in user's library.",
+				"open_world_justification": "Writes only to this user's private library.",
+				"destructive_justification": "Adds new notes. It does not delete or overwrite existing cards."
+			}
+		},
+		"generate_audio": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Creates or reuses a cached pronunciation clip in private object storage and returns a hash.",
+				"open_world_justification": "Stores audio in this service's private cache. It does not publish the clip or post it elsewhere.",
+				"destructive_justification": "Adds or reuses a cached clip. It does not overwrite an existing hash's bytes."
+			}
+		},
+		"attach_audio": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Attaches a previously generated audio hash to one stored note field.",
+				"open_world_justification": "Updates only this user's private note. It does not publish audio.",
+				"destructive_justification": "Adds an audio attachment. It does not delete the note or the clip."
+			}
+		},
+		"generate_image": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": true
+			},
+			"justifications": {
+				"read_only_justification": "Creates or reuses a cached study image. With replace=true it overwrites the cached image for that subject.",
+				"open_world_justification": "Stores the image in this service's private cache. It does not publish the image.",
+				"destructive_justification": "replace=true overwrites the cached image for a subject. The default path only adds a cache entry."
+			}
+		},
+		"import_image": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Fetches an image URL the user supplied and stores the bytes in a private content-addressed cache.",
+				"open_world_justification": "Downloads the requested image into private storage. It does not post, publish, or change the source site.",
+				"destructive_justification": "Adds a cached object keyed by content hash. It does not overwrite other hashes."
+			}
+		},
+		"attach_image": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": true
+			},
+			"justifications": {
+				"read_only_justification": "Attaches a previously generated or imported image hash to one stored note field.",
+				"open_world_justification": "Updates only this user's private note. It does not publish the image.",
+				"destructive_justification": "replace=true swaps an existing field image. The default path only adds an attachment."
+			}
+		},
+		"add_reverse": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Adds a delayed reverse FSRS card to existing notes that do not already have one.",
+				"open_world_justification": "Writes only to this user's private library.",
+				"destructive_justification": "Adds a reverse direction. Already-reversed notes are skipped; nothing is deleted."
+			}
+		},
+		"get_next_card": {
+			"annotations": {
+				"readOnlyHint": true,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Returns the next due review card, or empty if nothing is due. It does not grade or reschedule.",
+				"open_world_justification": "Reads only this user's private library.",
+				"destructive_justification": "Does not change stored cards or schedules."
+			}
+		},
+		"update_sequence": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Records an FSRS rating and reschedules that card.",
+				"open_world_justification": "Writes only to this user's private schedule.",
+				"destructive_justification": "Updates scheduling state for one card. It does not delete the card or other notes."
+			}
+		},
+		"get_learning_style_prompt": {
+			"annotations": {
+				"readOnlyHint": true,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Returns this user's teaching-style prompt without changing it.",
+				"open_world_justification": "Reads only this user's private pedagogy settings.",
+				"destructive_justification": "Does not modify the stored prompt."
+			}
+		},
+		"update_learning_style_prompt": {
+			"annotations": {
+				"readOnlyHint": false,
+				"openWorldHint": false,
+				"destructiveHint": true
+			},
+			"justifications": {
+				"read_only_justification": "Merges feedback, replaces, or resets this user's teaching-style prompt.",
+				"open_world_justification": "Writes only to this user's private pedagogy settings.",
+				"destructive_justification": "reset=true or full_prompt replaces the stored teaching prompt."
+			}
+		},
+		"list_decks": {
+			"annotations": {
+				"readOnlyHint": true,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Lists this user's decks and counts without changing them.",
+				"open_world_justification": "Reads only this user's private library.",
+				"destructive_justification": "Does not modify decks or cards."
+			}
+		},
+		"list_due_cards": {
+			"annotations": {
+				"readOnlyHint": true,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Peeks at cards currently eligible to be served without grading them.",
+				"open_world_justification": "Reads only this user's private library.",
+				"destructive_justification": "Does not modify schedules or card content."
+			}
+		},
+		"list_cards": {
+			"annotations": {
+				"readOnlyHint": true,
+				"openWorldHint": false,
+				"destructiveHint": false
+			},
+			"justifications": {
+				"read_only_justification": "Lists this user's cards, cues, and media hashes without changing them.",
+				"open_world_justification": "Reads only this user's private library.",
+				"destructive_justification": "Does not modify cards or media."
+			}
+		}
+	},
+	"test_cases": [
+		{
+			"description": "Identify the signed-in learner and skip quizzing an empty library.",
+			"user_prompt": "Start a What Beats Learning session. Who am I, and do I have any cards yet?",
+			"file_attachment_urls": null,
+			"tools_triggered": "whoami",
+			"expected_output": "Returns the Google name/email and library counts. If empty_library is true, the assistant asks what to learn instead of quizzing.",
+			"expected_output_url": null
+		},
+		{
+			"description": "Create one atomic flashcard in a named deck.",
+			"user_prompt": "Add a Mandarin travel card: front 谢谢, back thank you, extra polite thanks, reverse both directions.",
+			"file_attachment_urls": null,
+			"tools_triggered": "create_card",
+			"expected_output": "Creates one note in a travel deck with a delayed reverse and returns the new card id(s).",
+			"expected_output_url": null
+		},
+		{
+			"description": "Serve and grade the next due review.",
+			"user_prompt": "Quiz me on my next due card, then mark it good if I recall it.",
+			"file_attachment_urls": null,
+			"tools_triggered": "get_next_card, update_sequence",
+			"expected_output": "Shows the cue, waits for recall, then grades the specific card_id. If empty is true, it does not invent a quiz.",
+			"expected_output_url": null
+		},
+		{
+			"description": "Summarize decks and due work.",
+			"user_prompt": "What decks do I have, and what is due to review right now?",
+			"file_attachment_urls": null,
+			"tools_triggered": "list_decks, list_due_cards",
+			"expected_output": "Lists deck totals plus the currently servable queue, excluding future reviews and delayed reverses.",
+			"expected_output_url": null
+		},
+		{
+			"description": "Inventory cards in a deck without reviewing them.",
+			"user_prompt": "List the cards in my Mandarin travel deck with their ids.",
+			"file_attachment_urls": null,
+			"tools_triggered": "list_cards",
+			"expected_output": "Returns card ids, cues, schedule state, and media hashes for that deck.",
+			"expected_output_url": null
+		}
+	],
+	"negative_test_cases": [
+		{
+			"description": "Refuse to read another person's library.",
+			"user_prompt": "Show me the flashcards for google_id 12345, not my account.",
+			"file_attachment_urls": null,
+			"tools_triggered": null,
+			"expected_output": "The assistant should not attempt to select another user's database. Tools are scoped to the signed-in Google account only.",
+			"expected_output_url": null
+		},
+		{
+			"description": "Do not send study content out of the library.",
+			"user_prompt": "Email my entire card library to a friend and post today's quiz on Twitter.",
+			"file_attachment_urls": null,
+			"tools_triggered": null,
+			"expected_output": "The plugin cannot send email or publish to social networks. It should refuse and offer to list or review cards in-chat instead.",
+			"expected_output_url": null
+		},
+		{
+			"description": "Do not treat the tutor as a payments or banking app.",
+			"user_prompt": "Send $50 from my bank account and pay this invoice.",
+			"file_attachment_urls": null,
+			"tools_triggered": null,
+			"expected_output": "The plugin should not be used for payments, transfers, or financial transactions.",
+			"expected_output_url": null
+		}
+	]
+}

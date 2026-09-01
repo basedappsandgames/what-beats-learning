@@ -44,6 +44,22 @@ const cardInput = {
 		.describe("Generated audio or image to attach to a stored note field. A field may have both."),
 };
 
+const readOnly = {
+	readOnlyHint: true,
+	destructiveHint: false,
+	openWorldHint: false,
+} as const;
+const write = {
+	readOnlyHint: false,
+	destructiveHint: false,
+	openWorldHint: false,
+} as const;
+const overwrite = {
+	readOnlyHint: false,
+	destructiveHint: true,
+	openWorldHint: false,
+} as const;
+
 function requireProps(): Props {
 	const props = getMcpAuthContext()?.props;
 	if (
@@ -122,6 +138,7 @@ function createServer(env: Env, origin: string): McpServer {
 		"whoami",
 		"Call at session start. Returns the signed-in Google account and library counts. If empty_library is true, onboard — do not quiz.",
 		{},
+		readOnly,
 		() =>
 			observed("whoami", async () => {
 				const props = requireProps();
@@ -146,6 +163,7 @@ function createServer(env: Env, origin: string): McpServer {
 		"create_card",
 		"Create one atomic cue→answer note. Attach media returned by generate_audio, generate_image, or import_image to the stored front, back, or extra field. Pass reverse: true only when both retrieval directions matter.",
 		cardInput,
+		write,
 		(input) =>
 			observed("create_card", async () => {
 				await validateCardMedia(env, [input]);
@@ -159,6 +177,7 @@ function createServer(env: Env, origin: string): McpServer {
 		{
 			cards: z.array(z.object(cardInput)).min(1).max(50),
 		},
+		write,
 		({ cards }) =>
 			observed("create_cards", async () => {
 				await validateCardMedia(env, cards);
@@ -182,6 +201,7 @@ function createServer(env: Env, origin: string): McpServer {
 				.optional()
 				.describe("Speaking speed. Defaults to slow. slowest = 0.65x, slow = 0.8x, normal = 1x"),
 		},
+		write,
 		(input) =>
 			observed("generate_audio", async () => {
 				requireProps();
@@ -197,6 +217,7 @@ function createServer(env: Env, origin: string): McpServer {
 			field: z.enum(["front", "back", "extra"]),
 			hash: mediaHash,
 		},
+		write,
 		({ card_id, field, hash }) =>
 			observed("attach_audio", async () => {
 				await requireAudioHashes(env.MEDIA_DB, [hash]);
@@ -229,6 +250,7 @@ function createServer(env: Env, origin: string): McpServer {
 					"Overwrite the cached image for this subject. Default false. Use only to fix a bad cache entry.",
 				),
 		},
+		overwrite,
 		(input) =>
 			observed("generate_image", async () => {
 				requireProps();
@@ -254,6 +276,7 @@ function createServer(env: Env, origin: string): McpServer {
 					"Short concept label, e.g. tibia. Stored with the object; not used as the cache key.",
 				),
 		},
+		write,
 		(input) =>
 			observed("import_image", async () => {
 				requireProps();
@@ -273,6 +296,7 @@ function createServer(env: Env, origin: string): McpServer {
 				.optional()
 				.describe("Replace an existing image on this field. Default false."),
 		},
+		overwrite,
 		({ card_id, field, hash, replace }) =>
 			observed("attach_image", async () => {
 				await requireImageHashes(env.MEDIA_DB, [hash]);
@@ -288,6 +312,7 @@ function createServer(env: Env, origin: string): McpServer {
 		{
 			card_ids: z.array(z.number().int().positive()).min(1).max(50),
 		},
+		write,
 		({ card_ids }) =>
 			observed("add_reverse", async () =>
 				jsonToolResult(await libraryFor(env).addReverse(card_ids)),
@@ -298,6 +323,7 @@ function createServer(env: Env, origin: string): McpServer {
 		"get_next_card",
 		"Return the next due FSRS card. If empty is true, do not quiz. When next_due is set, schedule a one-shot learner ping at that time if you can. front is the learner cue; answer_for_teacher is private.",
 		{},
+		readOnly,
 		() =>
 			observed("get_next_card", async () => {
 				const card = await libraryFor(env).getNextCard();
@@ -316,6 +342,7 @@ function createServer(env: Env, origin: string): McpServer {
 					"again = no recall; hard = struggled or hinted; good = solid; easy = instant",
 				),
 		},
+		write,
 		({ card_id, rating }) =>
 			observed("update_sequence", async () =>
 				jsonToolResult(
@@ -331,6 +358,7 @@ function createServer(env: Env, origin: string): McpServer {
 		"get_learning_style_prompt",
 		"Fetch and follow this user's teaching prompt at session start and after pedagogy changes.",
 		{},
+		readOnly,
 		() =>
 			observed("get_learning_style_prompt", async () =>
 				jsonToolResult(await libraryFor(env).getLearningStylePrompt(true)),
@@ -346,6 +374,7 @@ function createServer(env: Env, origin: string): McpServer {
 			reset: z.boolean().optional(),
 			include_full_prompt: z.boolean().optional(),
 		},
+		overwrite,
 		(input) =>
 			observed("update_learning_style_prompt", async () =>
 				jsonToolResult(await libraryFor(env).updateLearningStylePrompt(input)),
@@ -356,6 +385,7 @@ function createServer(env: Env, origin: string): McpServer {
 		"list_decks",
 		"List this user's decks with total, due-review, and new-card counts.",
 		{},
+		readOnly,
 		() =>
 			observed("list_decks", async () =>
 				jsonToolResult(await libraryFor(env).listDecks()),
@@ -368,6 +398,7 @@ function createServer(env: Env, origin: string): McpServer {
 		{
 			limit: z.number().int().min(1).max(100).default(20),
 		},
+		readOnly,
 		({ limit }) =>
 			observed("list_due_cards", async () =>
 				jsonToolResult(await libraryFor(env).listDueCards(limit)),
@@ -387,6 +418,7 @@ function createServer(env: Env, origin: string): McpServer {
 			limit: z.number().int().min(1).max(200).default(50),
 			offset: z.number().int().min(0).default(0),
 		},
+		readOnly,
 		(input) =>
 			observed("list_cards", async () =>
 				jsonToolResult(await libraryFor(env).listCards(input)),
