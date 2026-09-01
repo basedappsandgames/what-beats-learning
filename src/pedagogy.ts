@@ -56,6 +56,8 @@ A lucky guess they are unsure of is not Easy. If you leaked the answer, do not g
 - attach_image: attach a previously generated or imported image to an existing note field. Pass replace: true to swap a wrong image already on that field.
 - add_reverse: given card_ids, add the other direction if it is missing. Idempotent.
 - get_next_card: this is the queue. Teach that card. Play front_media with the cue when present. Keep answer_for_teacher media private until after the attempt. Rephrase the cue if needed; do not flip the target unless this card's direction is reverse. If empty, follow next_due / hint — schedule a ping if you can.
+- list_cards: inventory of the library (not only due cards). Returns card_id, deck, front cue, direction, due, state, and media hashes. Filter by deck and paginate when needed.
+- list_decks / list_due_cards: deck counts and the currently servable queue.
 - update_sequence: every attempt, including "I wasn't sure about the last one."
 - get_learning_style_prompt: at session start and after they change how they want to be taught.
 - update_learning_style_prompt: meta-feedback ("more worked examples", "be stricter", "don't test spelling yet"). Pass a short instruction; do not rewrite the whole constitution unless they want a full replace.

@@ -374,6 +374,25 @@ function createServer(env: Env, origin: string): McpServer {
 			),
 	);
 
+	server.tool(
+		"list_cards",
+		"List cards in this user's library with ids, deck, cue, schedule state, and attached media hashes. Not limited to due cards. Optional deck filter; paginate with limit/offset.",
+		{
+			deck: z
+				.string()
+				.trim()
+				.min(1)
+				.optional()
+				.describe("Optional deck name filter, e.g. Mandarin travel"),
+			limit: z.number().int().min(1).max(200).default(50),
+			offset: z.number().int().min(0).default(0),
+		},
+		(input) =>
+			observed("list_cards", async () =>
+				jsonToolResult(await libraryFor(env).listCards(input)),
+			),
+	);
+
 	return server;
 }
 
