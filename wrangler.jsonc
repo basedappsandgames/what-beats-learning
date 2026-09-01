@@ -62,5 +62,12 @@
 			"database_id": "c96647fc-cda8-4e64-9968-e75e54c88590",
 			"migrations_dir": "migrations"
 		}
+	],
+	"rules": [
+		{
+			"type": "Data",
+			"globs": ["**/*.png"],
+			"fallthrough": true
+		}
 	]
 }
