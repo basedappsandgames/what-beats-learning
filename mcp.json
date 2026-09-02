@@ -1,0 +1,9 @@
+{
+	"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+	"mcpServers": {
+		"what-beats-learning": {
+			"type": "streamable-http",
+			"url": "https://what-beats-learning.bagapps.workers.dev/mcp"
+		}
+	}
+}

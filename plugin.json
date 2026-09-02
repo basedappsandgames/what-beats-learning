@@ -1,0 +1,12 @@
+{
+	"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+	"name": "what-beats-learning",
+	"version": "0.4.0",
+	"description": "Spaced-repetition flashcards plugin (FSRS) for Cursor and Grok Bot. Wraps the What Beats Learning remote MCP so an agent can create, review, and schedule cue→answer cards isolated per Google account.",
+	"author": {
+		"name": "Based Apps and Games"
+	},
+	"homepage": "https://what-beats-learning.bagapps.workers.dev",
+	"repository": "https://github.com/basedappsandgames/what-beats-learning",
+	"keywords": ["flashcards", "spaced-repetition", "fsrs", "mcp"]
+}
