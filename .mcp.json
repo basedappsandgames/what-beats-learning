@@ -1,0 +1,8 @@
+{
+	"mcpServers": {
+		"what-beats-learning": {
+			"type": "http",
+			"url": "https://whatbeatslearning.com/mcp"
+		}
+	}
+}

@@ -2,13 +2,14 @@
 
 Remote MCP for spaced-repetition tutoring. Each Google account gets an isolated Durable Object SQLite library with FSRS scheduling.
 
-Live Worker: [https://what-beats-learning.bagapps.workers.dev](https://what-beats-learning.bagapps.workers.dev)
+Live site: [https://whatbeatslearning.com](https://whatbeatslearning.com)
 
 ## Connect
 
 | Transport | URL |
 |-----------|-----|
-| Streamable HTTP | `https://what-beats-learning.bagapps.workers.dev/mcp` |
+| Streamable HTTP | `https://whatbeatslearning.com/mcp` |
+| Workers.dev | `https://what-beats-learning.bagapps.workers.dev/mcp` |
 | Local | `http://localhost:8788/mcp` |
 
 Cursor configuration:
@@ -17,7 +18,7 @@ Cursor configuration:
 {
   "mcpServers": {
     "what-beats-learning": {
-      "url": "https://what-beats-learning.bagapps.workers.dev/mcp"
+      "url": "https://whatbeatslearning.com/mcp"
     }
   }
 }
@@ -38,6 +39,25 @@ Marketplace listing comes later. Until then, install locally in Cursor by copyin
 At minimum copy `plugin.json`, `mcp.json`, and `skills/`. Restart Cursor or run **Developer: Reload Window**, then open Customize and confirm the plugin, skill, and MCP server. Sign in with Google when the client prompts.
 
 In Grok Bot, add the plugin from **Plugins** once it is listed in a marketplace, then finish Google sign-in in the browser. Until then, connect the same remote MCP URL from the table above.
+
+## Plugin (ChatGPT / Codex)
+
+Codex / ChatGPT desktop:
+
+```bash
+codex mcp add what-beats-learning --url https://whatbeatslearning.com/mcp
+codex mcp login what-beats-learning
+```
+
+This repo is also an MCP-only Codex/ChatGPT plugin package (`.codex-plugin/plugin.json`, `.mcp.json`, `assets/icon.png`). For local directory testing, the repo marketplace is `.agents/plugins/marketplace.json` (`codex plugin marketplace add .` from the repo root, then restart ChatGPT desktop). There is no `.app.json` yet: that file is only added after ChatGPT developer mode issues a `plugin_asdk_app…` connection ID. Public listing does not use that ID.
+
+To submit to the ChatGPT / Codex Plugins Directory:
+
+1. Verify the OpenAI organization (Apps Management write access + developer/business identity).
+2. Open the [plugin submission portal](https://developers.openai.com/plugins/deploy/submission), create a plugin **with MCP**, and use the universal URL `https://whatbeatslearning.com/mcp`.
+3. Listing copy, logo, category, website, privacy, and terms are already in `.codex-plugin/plugin.json`. Tool hint justifications and sample prompts are in `chatgpt-app-submission.json`.
+4. When the portal asks for domain verification, host the exact token at `https://whatbeatslearning.com/.well-known/openai-apps-challenge` (plain text, that token only).
+5. Scan tools, add five positive and three negative test cases, then submit. Publishing is a separate step after review.
 
 ## Tools
 

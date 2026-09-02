@@ -112,11 +112,11 @@ app.get("/", (c) => {
 }</pre>
     <p>Connect, sign in with Google, then ask Cursor to make you any flashcards you want.</p>
 
-    <h3>Codex</h3>
+    <h3>ChatGPT and Codex</h3>
     <p>In a terminal:</p>
     <pre>codex mcp add what-beats-learning --url ${origin}/mcp
 codex mcp login what-beats-learning</pre>
-    <p>Sign in with Google when prompted. In the ChatGPT desktop app, you can instead go to Settings → MCP servers and paste <span class="url">${origin}/mcp</span>. Then ask Codex to make you any flashcards you want.</p>
+    <p>Sign in with Google when prompted. In the ChatGPT desktop app you can paste <span class="url">${origin}/mcp</span> under Settings → MCP servers, or install What Beats Learning from the Plugins directory when it is listed. Then ask it to make you any flashcards you want.</p>
 
     <p>Each Google account gets its own isolated SQLite library with FSRS scheduling. Other users cannot read or write it.</p>
     <footer>
