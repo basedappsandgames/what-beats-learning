@@ -25,6 +25,20 @@ Cursor configuration:
 
 MCP Inspector: `npx @modelcontextprotocol/inspector@latest` then connect to `/mcp`.
 
+## Plugin (Cursor / Grok Bot)
+
+This repo is an [Agent Plugin](https://agent-plugins.org/) (`plugin.json`, `mcp.json`, `skills/`) that wraps the live Streamable HTTP MCP above. Google OAuth is handled by the Worker; the plugin does not store client secrets or plugin variables.
+
+Marketplace listing comes later. Until then, install locally in Cursor by copying this repository into a **real directory** (not a symlink out of that folder):
+
+```
+~/.cursor/plugins/local/what-beats-learning
+```
+
+At minimum copy `plugin.json`, `mcp.json`, and `skills/`. Restart Cursor or run **Developer: Reload Window**, then open Customize and confirm the plugin, skill, and MCP server. Sign in with Google when the client prompts.
+
+In Grok Bot, add the plugin from **Plugins** once it is listed in a marketplace, then finish Google sign-in in the browser. Until then, connect the same remote MCP URL from the table above.
+
 ## Tools
 
 | Tool | Purpose |
