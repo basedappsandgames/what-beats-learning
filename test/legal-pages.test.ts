@@ -34,3 +34,39 @@ describe("home page", () => {
 		expect(html).toContain("Plugins directory");
 	});
 });
+
+describe("llms.txt", () => {
+	it("serves homepage install steps and the agent VM install guide", async () => {
+		const response = await GoogleHandler.request("https://whatbeatslearning.com/llms.txt");
+		const text = await response.text();
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-type")).toContain("text/plain");
+		expect(text).toMatch(/^# What Beats Learning/u);
+		expect(text).toContain("https://whatbeatslearning.com/mcp");
+		expect(text).toContain("Grok Bot");
+		expect(text).toContain('please add this MCP and then prompt me to auth it: "url": "https://whatbeatslearning.com/mcp"');
+		expect(text).toContain("Customize → Connectors → Add custom connector");
+		expect(text).toContain("Customize → MCPs");
+		expect(text).toContain('"what-beats-learning"');
+		expect(text).toContain("codex mcp add what-beats-learning --url https://whatbeatslearning.com/mcp");
+		expect(text).toContain("codex mcp login what-beats-learning");
+		expect(text).toContain("How to install on agents with VMs but not native custom MCP support");
+		expect(text).toContain("POST https://whatbeatslearning.com/register");
+		expect(text).toContain("token_endpoint_auth_method");
+		expect(text).toContain("code_challenge_method=S256");
+		expect(text).toContain("resource=https://whatbeatslearning.com/mcp");
+		expect(text).toContain("application/x-www-form-urlencoded");
+		expect(text).toContain("POST https://whatbeatslearning.com/token");
+		expect(text).toContain("MCP-Protocol-Version");
+	});
+
+	it("uses the request origin for MCP and OAuth URLs", async () => {
+		const response = await GoogleHandler.request("https://example.com/llms.txt");
+		const text = await response.text();
+
+		expect(text).toContain("https://example.com/mcp");
+		expect(text).toContain("POST https://example.com/register");
+		expect(text).not.toContain("https://whatbeatslearning.com");
+	});
+});

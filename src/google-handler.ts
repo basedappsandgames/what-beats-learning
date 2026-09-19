@@ -6,6 +6,7 @@ import {
 } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { privacyPolicyPage, termsOfServicePage } from "./legal-pages";
+import { llmsTxt } from "./llms-txt";
 import { serveMedia } from "./media";
 import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl, type Props } from "./utils";
 import {
@@ -130,6 +131,12 @@ codex mcp login what-beats-learning</pre>
 
 app.get("/docs/privacy", (c) => c.html(privacyPolicyPage()));
 app.get("/docs/terms", (c) => c.html(termsOfServicePage()));
+app.get("/llms.txt", (c) => {
+	const origin = new URL(c.req.url).origin;
+	return c.text(llmsTxt(origin), 200, {
+		"Content-Type": "text/plain; charset=utf-8",
+	});
+});
 app.on(["GET", "HEAD"], "/media/:hash", (c) =>
 	serveMedia(c.req.raw, c.env.MEDIA_BUCKET, c.env.MEDIA_DB, c.req.param("hash")),
 );
